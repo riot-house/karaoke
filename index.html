@@ -389,7 +389,7 @@
             <select id="asrModel" class="btn small" style="font-weight:500">
               <option value="petit">Rapide · 41 Mo</option>
               <option value="moyen" selected>Équilibré · 77 Mo</option>
-              <option value="grand">Précis · 248 Mo</option>
+              <option value="grand">Précis · 249 Mo</option>
             </select>
             <label class="check" style="font-size:12px"><input type="checkbox" id="asrCentre" checked> Isoler le centre</label>
             <button class="btn small ghost" id="impJson">Importer le calage du plugin</button>
@@ -2486,8 +2486,10 @@ $("asrAlign").addEventListener("click", function(){
     var verdict = pct >= 80 ? "Bon calage."
                 : pct >= 55 ? "Calage utilisable — vérifiez les lignes en orange."
                 : "<b>Peu fiable.</b> Essayez le modèle « Précis », ou passez par « Caler au clavier ».";
+    var fin = (json.timing === "phrase")
+      ? " <i>Datation par phrase seulement (repli) : le calage sera moins fin.</i>" : "";
     $("asrstat").innerHTML = "<b>" + pct + " %</b> de vos paroles retrouvées dans l'audio · "
-      + json.heardCount + " mots entendus. " + verdict;
+      + json.heardCount + " mots entendus. " + verdict + fin;
     if (json.heard){
       $("asrheard").hidden = false;
       $("asrheardtxt").textContent = json.heard;
