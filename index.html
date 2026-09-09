@@ -1,0 +1,2853 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Transformez un MP3 et des paroles en vidéo karaoké, sans rien téléverser : tout se passe dans votre navigateur.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%89%3C/text%3E%3C/svg%3E">
+<meta property="og:title" content="Studio Karaoké">
+<meta property="og:description" content="Un MP3, vos paroles, une vidéo karaoké — dans le navigateur.">
+<style>
+  html{color-scheme:dark}
+  body{margin:0;padding:0;background:#0B0D12;color:#EEF0F6;
+       font:14px 'Manrope',-apple-system,BlinkMacSystemFont,sans-serif}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>Studio Karaoké</title>\n</head>\n<body>\n<title>Studio Karaoké</title>
+<!-- feuille de polices chargée sans bloquer l'affichage : une police
+     lente ou injoignable ne doit pas retarder le démarrage -->
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Anton&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Interface de montage : parti pris sombre assumé, comme les outils vidéo.
+     Toutes les couleurs sont posées explicitement, aucun thème hérité. */
+  :root{
+    --bg:#0B0D12;
+    --panel:#12141C;
+    --panel-2:#191C26;
+    --sunk:#0E1017;
+    --line:#242835;
+    --line-2:#2F3546;
+    --text:#EEF0F6;
+    --muted:#98A1B4;
+    --faint:#6B7488;
+    --yellow:#FFCC00;
+    --navy:#0A1F44;
+    --ok:#5CC28E;
+    --warn:#E0A93C;
+    --danger:#F0705F;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);color:var(--text);margin:0;
+    font-family:'Manrope',ui-sans-serif,system-ui,sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit;}
+  :focus-visible{outline:2px solid var(--yellow);outline-offset:2px;}
+
+  .app{max-width:1240px;margin:0 auto;padding:20px 20px 60px;}
+
+  /* ---------- barre de titre ---------- */
+  .top{
+    display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+    flex-wrap:wrap;padding-bottom:14px;margin-bottom:18px;border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;}
+  .brand h1{
+    font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;
+    font-size:22px;letter-spacing:.02em;margin:0;
+  }
+  .brand h1 span{color:var(--yellow);}
+  .brand .tag{
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10.5px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+  }
+  .steps{display:flex;gap:6px;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;
+    flex-wrap:wrap;}
+  .steps button{
+    padding:5px 11px;border-radius:999px;border:1px solid var(--line-2);
+    background:transparent;color:var(--faint);font-weight:400;letter-spacing:.05em;
+    font-size:11px;cursor:pointer;transition:color .15s,border-color .15s,background .15s;
+  }
+  .steps button:hover{color:var(--text);border-color:var(--muted);}
+  .steps button.on{color:#1A1400;background:var(--yellow);border-color:var(--yellow);font-weight:600;}
+  /* la carte visée clignote une fois : on voit où l'on vient d'atterrir */
+  @keyframes landed{from{border-color:var(--yellow);}to{border-color:var(--line);}}
+  .card.landed{animation:landed 1.1s ease-out;}
+  @media (prefers-reduced-motion: reduce){ .card.landed{animation:none;} }
+
+  /* ---------- accueil ---------- */
+  .welcome{
+    position:fixed;inset:0;z-index:60;background:var(--bg);
+    display:flex;align-items:center;justify-content:center;padding:24px;
+    overflow-y:auto;
+  }
+  .welcome[hidden]{display:none;}
+  .wrap{max-width:760px;width:100%;}
+  .wtag{
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);margin:0 0 18px;
+  }
+  .wtitle{
+    position:relative;font-family:'Anton',Impact,sans-serif;font-weight:400;
+    text-transform:uppercase;letter-spacing:.01em;line-height:1.04;
+    font-size:clamp(38px,7.4vw,76px);margin:0 0 6px;text-wrap:balance;
+    padding-top:40px;color:rgba(255,255,255,.5);
+  }
+  .wtitle .w{transition:color .28s,text-shadow .28s;}
+  .wtitle .w.on{color:var(--yellow);text-shadow:0 0 26px rgba(255,204,0,.5);}
+  .wtitle .w.done{color:#FFFFFF;}
+  .wball{position:absolute;left:0;top:0;width:46px;height:46px;
+    transition:transform .40s cubic-bezier(.34,1.3,.5,1);pointer-events:none;}
+  .wball img{width:100%;height:100%;display:block;animation:hop .76s ease-in-out infinite;}
+  @keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-13px)}}
+  @media (prefers-reduced-motion: reduce){
+    .wball img{animation:none;}
+    .wball{transition:none;}
+  }
+  .wlead{font-size:16.5px;line-height:1.62;color:var(--muted);max-width:60ch;margin:22px 0 0;}
+  .wlead b{color:var(--text);font-weight:600;}
+  .wsteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;
+    margin:30px 0 0;background:var(--line);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;}
+  @media (max-width:640px){ .wsteps{grid-template-columns:1fr;} }
+  .wstep{background:var(--panel);padding:15px 16px;display:flex;flex-direction:column;gap:5px;}
+  .wstep .n{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10.5px;
+    letter-spacing:.12em;color:var(--yellow);}
+  .wstep .t{font-weight:700;font-size:14px;color:var(--text);}
+  .wstep .d{font-size:12.5px;color:var(--muted);line-height:1.5;}
+  .wgo{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:26px 0 0;}
+  .wnote{font-size:12px;color:var(--faint);line-height:1.6;margin:20px 0 0;max-width:62ch;}
+
+  /* ---------- disposition ---------- */
+  .main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start;}
+  @media (max-width:960px){.main{grid-template-columns:1fr;}}
+
+  /* ---------- moniteur ---------- */
+  .monitor{
+    background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    position:relative;aspect-ratio:16/9;
+  }
+  .monitor canvas{display:block;width:100%;height:100%;}
+  .badge169{
+    position:absolute;top:10px;left:12px;z-index:3;
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.1em;
+    color:rgba(255,255,255,.55);background:rgba(0,0,0,.4);padding:3px 8px;border-radius:4px;
+  }
+
+  /* ---------- transport ---------- */
+  .transport{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px;margin-top:12px;display:flex;flex-direction:column;gap:12px;
+  }
+  .tline{display:flex;align-items:center;gap:12px;}
+  .btn{
+    background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);
+    padding:9px 15px;border-radius:8px;cursor:pointer;font-weight:600;
+    transition:border-color .15s,background .15s;white-space:nowrap;
+  }
+  .btn:hover:not(:disabled){border-color:var(--yellow);}
+  .btn:disabled{opacity:.4;cursor:default;}
+  .btn.primary{background:var(--yellow);color:#1A1400;border-color:var(--yellow);}
+  .btn.primary:hover:not(:disabled){background:#FFD633;}
+  .btn.ghost{background:transparent;}
+  .btn.small{padding:6px 11px;font-size:12.5px;font-weight:500;}
+  .tc{
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12.5px;color:var(--muted);
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .scrub{position:relative;height:56px;background:var(--sunk);border-radius:6px;
+    border:1px solid var(--line);overflow:hidden;cursor:pointer;}
+  .scrub canvas{display:block;width:100%;height:100%;}
+
+  /* ---------- panneau latéral ---------- */
+  .side{display:flex;flex-direction:column;gap:12px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .card > h2{
+    margin:0;padding:13px 15px;font-family:'IBM Plex Mono',ui-monospace,monospace;
+    font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);
+    border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+    align-items:center;gap:10px;font-weight:500;
+  }
+  .card > h2 .n{color:var(--yellow);}
+  #memstat{font-size:10px;letter-spacing:.06em;color:var(--faint);text-transform:none;}
+  .body{padding:15px;display:flex;flex-direction:column;gap:13px;}
+
+  label.f{display:flex;flex-direction:column;gap:6px;}
+  label.f > span{font-size:12px;color:var(--muted);}
+  input[type=file]{font-size:12.5px;color:var(--muted);width:100%;}
+  input[type=file]::file-selector-button{
+    background:var(--panel-2);border:1px solid var(--line-2);color:var(--text);
+    padding:7px 12px;border-radius:7px;margin-right:10px;cursor:pointer;font-weight:600;
+  }
+  textarea{
+    background:var(--sunk);border:1px solid var(--line-2);border-radius:8px;
+    padding:10px;min-height:120px;resize:vertical;line-height:1.55;font-size:13px;
+  }
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .row.tight{gap:6px;}
+
+  .slider{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;}
+  .slider > span{font-size:12px;color:var(--muted);}
+  .slider > b{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;
+    color:var(--text);font-weight:400;font-variant-numeric:tabular-nums;}
+  .slider > input{grid-column:1 / -1;width:100%;accent-color:var(--yellow);}
+  input[type=color]{width:34px;height:26px;padding:0;border:1px solid var(--line-2);
+    border-radius:5px;background:none;cursor:pointer;}
+
+  .check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--muted);cursor:pointer;}
+  .check input{accent-color:var(--yellow);width:15px;height:15px;}
+
+  /* ---------- lignes de paroles ---------- */
+  .lyrics{display:flex;flex-direction:column;gap:1px;max-height:230px;overflow-y:auto;
+    background:var(--sunk);border:1px solid var(--line-2);border-radius:8px;padding:4px;}
+  .ly{
+    display:grid;grid-template-columns:26px 8px 1fr auto;gap:9px;align-items:baseline;
+    padding:6px 8px;border-radius:5px;cursor:pointer;
+  }
+  .ly .c{width:7px;height:7px;border-radius:50%;background:var(--line-2);align-self:center;}
+  .ly:hover{background:var(--panel-2);}
+  .ly.cur{background:rgba(255,204,0,.13);}
+  .ly.done{opacity:.55;}
+  .ly .i{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--faint);
+    font-variant-numeric:tabular-nums;}
+  .ly .t{font-size:12.5px;line-height:1.4;}
+  .ly.cur .t{color:var(--yellow);font-weight:600;}
+  .ly .s{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--faint);
+    font-variant-numeric:tabular-nums;}
+  .ly.pause{opacity:.4;}
+  .ly.pause .t{font-style:italic;color:var(--faint);}
+
+  .hint{font-size:12px;color:var(--faint);line-height:1.5;}
+  .hint b{color:var(--muted);font-weight:600;}
+  kbd{
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;
+    background:var(--panel-2);border:1px solid var(--line-2);border-bottom-width:2px;
+    padding:2px 6px;border-radius:4px;color:var(--text);
+  }
+  .report{
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--faint);
+    line-height:1.7;
+  }
+  .report .rm{color:var(--warn);}
+  .stat{display:flex;gap:14px;flex-wrap:wrap;font-family:'IBM Plex Mono',ui-monospace,monospace;
+    font-size:11px;color:var(--faint);}
+  .stat b{color:var(--text);font-weight:500;}
+
+  .tapbar{
+    background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.35);border-radius:8px;
+    padding:11px 13px;display:none;flex-direction:column;gap:5px;
+  }
+  .tapbar.on{display:flex;}
+  .tapbar .taphead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;}
+  .tapbar .big{font-family:'Anton',Impact,sans-serif;font-size:19px;text-transform:uppercase;
+    letter-spacing:.02em;color:var(--yellow);line-height:1.15;}
+  .tapbar .cnt{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;
+    color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .tapbar .nx{font-size:12.5px;color:var(--muted);}
+
+  .prog{height:5px;background:var(--sunk);border-radius:999px;overflow:hidden;
+    border:1px solid var(--line-2);display:none;}
+  .prog.on{display:block;}
+  .prog i{display:block;height:100%;width:0;background:var(--yellow);transition:width .15s linear;}
+
+  .note{background:var(--panel-2);border-left:2px solid var(--yellow);padding:10px 12px;
+    border-radius:0 6px 6px 0;font-size:12px;color:var(--muted);line-height:1.55;}
+  .note b{color:var(--text);}
+
+  footer{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;color:var(--faint);
+    line-height:1.8;}
+</style>
+
+<section class="welcome" id="welcome" role="dialog" aria-modal="true" aria-labelledby="wtitle">
+  <div class="wrap">
+    <p class="wtag">Studio Karaoké · Riot House</p>
+    <h1 class="wtitle" id="wtitle">
+      <span class="wball" id="wball"><img alt=""></span>
+      <span class="w">Le</span> <span class="w">karaoké</span>
+      <span class="w">pour</span> <span class="w">tous&nbsp;!</span>
+    </h1>
+    <p class="wlead">
+      Vous donnez un <b>MP3</b> et les <b>paroles</b> copiées telles quelles.
+      La page les cale sur le chant, fait bondir le ballon de mot en mot, et
+      vous rend une <b>vidéo prête à poster</b>. Tout se passe dans votre
+      navigateur : le morceau ne part sur aucun serveur.
+    </p>
+    <div class="wsteps">
+      <div class="wstep">
+        <span class="n">D'ABORD</span>
+        <span class="t">Le son et les mots</span>
+        <span class="d">Collez les paroles depuis n'importe quelle recherche : les
+          en-têtes, les crédits et les « (x2) » sont retirés tout seuls.</span>
+      </div>
+      <div class="wstep">
+        <span class="n">ENSUITE</span>
+        <span class="t">Le calage</span>
+        <span class="d">La page repère les phrases chantées et pose les mots dessus.
+          Une pastille verte, orange ou rouge dit où regarder.</span>
+      </div>
+      <div class="wstep">
+        <span class="n">ENFIN</span>
+        <span class="t">La vidéo</span>
+        <span class="d">Fond réactif au son, texte qui grossit quand ça chante fort,
+          et l'encodage en 1080p sans quitter la page.</span>
+      </div>
+    </div>
+    <div class="wgo">
+      <button class="btn primary" id="wstart">Ouvrir le studio</button>
+      <button class="btn ghost" id="wdemo">Écouter la démo</button>
+    </div>
+    <p class="wnote">
+      Un chant est déjà chargé pour que vous voyiez tout de suite ce que ça donne.
+      Vous retrouverez cette page à tout moment par la pastille <b>Accueil</b>, en haut.
+    </p>
+  </div>
+</section>
+
+<div class="app">
+
+  <div class="top">
+    <div class="brand">
+      <h1>Studio <span>Karaoké</span></h1>
+      <span class="tag">prototype · 16:9 · tout dans le navigateur</span>
+    </div>
+    <nav class="steps" id="steps" aria-label="Étapes">
+      <button type="button" data-go="accueil">Accueil</button>
+      <button type="button" data-go="card-source">1 · Source</button>
+      <button type="button" data-go="card-calage">2 · Calage</button>
+      <button type="button" data-go="card-style">3 · Style</button>
+      <button type="button" data-go="card-rendu">4 · Rendu</button>
+    </nav>
+  </div>
+
+  <div class="main">
+
+    <div>
+      <div class="monitor">
+        <span class="badge169">1920 × 1080 · 16:9</span>
+        <canvas id="stage" width="1280" height="720"></canvas>
+      </div>
+
+      <div class="transport">
+        <div class="tline">
+          <button class="btn primary" id="play">▶ Lecture</button>
+          <button class="btn small ghost" id="rew">⟲ Début</button>
+          <span class="tc" id="tc">00:00,00 / 00:00,00</span>
+          <span style="flex:1"></span>
+          <span id="rates" class="row tight" style="gap:4px">
+            <button class="btn small primary" data-r="1">1×</button>
+            <button class="btn small" data-r="0.75">0,75×</button>
+            <button class="btn small" data-r="0.5">0,5×</button>
+          </span>
+          <button class="btn small" id="tap">Caler au clavier</button>
+        </div>
+        <div class="scrub" id="scrub"><canvas id="wave" width="1200" height="112"></canvas></div>
+        <div class="tapbar" id="tapbar">
+          <div class="taphead">
+            <span class="big" id="tapnow">—</span>
+            <span class="cnt" id="tapcount"></span>
+          </div>
+          <span class="nx" id="tapnext"></span>
+          <span class="nx"><kbd>Espace</kbd> au début de chaque ligne ·
+            <kbd>⌫</kbd> annule la dernière · <kbd>Échap</kbd> termine</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+
+      <div class="card" id="card-source">
+        <h2><span><span class="n">1</span> · Source</span><span id="srcbadge">démo</span></h2>
+        <div class="body">
+          <label class="f">
+            <span>Fichier audio</span>
+            <input type="file" id="file" accept="audio/*">
+          </label>
+          <label class="f">
+            <span>Paroles — collez-les telles quelles</span>
+            <textarea id="raw" spellcheck="false"></textarea>
+          </label>
+          <div class="report" id="report"></div>
+          <div class="note">
+            Les retours à la ligne du collage définissent les lignes affichées.
+            Les en-têtes <b>[Refrain]</b>, les crédits et les <b>(x2)</b> sont retirés
+            automatiquement ; les lignes vides sont gardées comme silences.
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="card-calage">
+        <h2><span><span class="n">2</span> · Calage</span><span id="algbadge">réparti</span></h2>
+        <div class="body">
+          <div class="row tight">
+            <button class="btn small primary" id="autoAlign">Caler sur le son</button>
+            <button class="btn small" id="asrAlign">Reconnaître les paroles</button>
+            <button class="btn small ghost" id="impJson">Importer le calage du plugin</button>
+            <input type="file" id="jsonfile" accept=".json,application/json" hidden>
+          </div>
+          <div class="prog" id="asrprog" hidden><i id="asrbar"></i></div>
+          <div class="report" id="asrstat"></div>
+          <div class="lyrics" id="lylist"></div>
+          <div class="row tight">
+            <button class="btn small" id="nudgeL">◀ −0,1 s</button>
+            <button class="btn small" id="nudgeR">+0,1 s ▶</button>
+            <button class="btn small ghost" id="setHere">Caler ici</button>
+            <button class="btn small ghost" id="unpin">Tout délier</button>
+          </div>
+          <p class="hint">La pastille indique la confiance du calage :
+            <b style="color:#5CC28E">verte</b> la ligne colle au chant,
+            <b style="color:#E0A93C">orange</b> à vérifier,
+            <b style="color:#F0705F">rouge</b> à recaler à la main. C'est une
+            indication, pas une garantie.<br>
+            Une ligne que vous recalez devient un <b>point fixe</b> (cerclé de jaune) :
+            le moteur ne la déplace plus et réaligne tout ce qui suit derrière elle.
+            Corriger la première ligne fausse, puis la suivante, converge vite.<br>
+            Pour un morceau entier, <b>Caler au clavier</b> va plus vite que ligne à
+            ligne : le calage démarre à la ligne sélectionnée, <kbd>Espace</kbd> marque
+            chaque début, <kbd>⌫</kbd> annule la dernière frappe, et les boutons de
+            vitesse ralentissent les passages serrés. Seuls les débuts de ligne sont à
+            taper — les mots se placent tout seuls sur les attaques détectées.</p>
+          <div class="stat" id="lvlstat"></div>
+        </div>
+      </div>
+
+      <div class="card" id="card-style">
+        <h2><span><span class="n">3</span> · Style</span></h2>
+        <div class="body">
+          <div class="row">
+            <label class="check"><input type="checkbox" id="cBall" checked> Ballon</label>
+            <select id="sBallStyle" class="btn small" style="font-weight:500">
+              <option value="image" selected>Image fournie</option>
+              <option value="dessin">Dessiné (colorable)</option>
+            </select>
+          </div>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="cDyn" checked> Taille selon l'intensité</label>
+          </div>
+          <div class="row">
+            <select id="sScope" class="btn small" style="font-weight:500;flex:1">
+              <option value="1" selected>Corps homogène par ligne</option>
+              <option value="2">Par ligne + cris isolés</option>
+              <option value="0">Par mot</option>
+            </select>
+            <label class="check"><input type="checkbox" id="cShake" checked> Vibration des cris</label>
+          </div>
+          <div class="row">
+            <label class="check" style="gap:7px"><input type="color" id="cAccent" value="#ffcc00"> Accent</label>
+            <label class="check" style="gap:7px"><input type="color" id="cBase" value="#0a1f44"> Fond</label>
+          </div>
+          <div class="slider">
+            <span>Corps du texte</span><b id="vSize">78</b>
+            <input type="range" id="rSize" min="40" max="130" value="78">
+          </div>
+          <div class="slider">
+            <span>Réaction du fond</span><b id="vReact">65</b>
+            <input type="range" id="rReact" min="0" max="100" value="65">
+          </div>
+          <div class="slider">
+            <span>Hauteur des paroles</span><b id="vPosY">54</b>
+            <input type="range" id="rPosY" min="20" max="85" value="54">
+          </div>
+          <div class="note">
+            Le fond réagit en <b>lumière et en échelle</b>, jamais en couleur saturée :
+            le jaune reste réservé au mot chanté.<br><br>
+            <b>Corps homogène par ligne</b> : tous les mots d'une phrase ont la même
+            taille, et c'est la phrase entière qui grossit quand elle est chantée
+            fort — son niveau est sa médiane en dB, pour qu'un mot isolé plus appuyé
+            ne tire pas tout vers le haut. Réglages identiques au panneau
+            After&nbsp;Effects.
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="card-rendu">
+        <h2><span><span class="n">4</span> · Rendu vidéo</span><span id="rndbadge"></span></h2>
+        <div class="body">
+          <div class="row">
+            <select id="res" class="btn small" style="font-weight:500">
+              <option value="1920x1080">1920 × 1080</option>
+              <option value="1280x720" selected>1280 × 720</option>
+            </select>
+            <select id="fps" class="btn small" style="font-weight:500">
+              <option value="25">25 i/s</option>
+              <option value="30" selected>30 i/s</option>
+            </select>
+            <select id="brate" class="btn small" style="font-weight:500">
+              <option value="4">4 Mb/s</option>
+              <option value="8" selected>8 Mb/s</option>
+              <option value="14">14 Mb/s</option>
+            </select>
+          </div>
+          <button class="btn primary" id="render">Fabriquer la vidéo</button>
+          <div class="prog" id="prog"><i id="progbar"></i></div>
+          <div class="report" id="rstat">Encodage dans le navigateur — le fichier ne part nulle part.</div>
+        </div>
+      </div>
+
+      <div class="card" id="card-export">
+        <h2><span>Export des timings</span><span id="memstat"></span></h2>
+        <div class="body">
+          <button class="btn primary" id="dl">Exporter le JSON du plugin</button>
+          <button class="btn small ghost" id="forget">Repartir du morceau fourni</button>
+          <p class="hint">Format identique à celui que lit le panneau After&nbsp;Effects :
+            <b>Importer .json</b> et vous générez les titres avec ce calage.<br>
+            Vos paroles, votre calage et vos réglages sont réenregistrés au fil de
+            l'eau et repris à la prochaine ouverture. Le bouton ci-dessus efface
+            cette mémoire et remet le morceau fourni.</p>
+          <textarea id="jsonout" spellcheck="false" style="display:none;min-height:90px;font-family:'IBM Plex Mono',monospace;font-size:11px"></textarea>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer>
+    Prototype — ce qu'il démontre : nettoyage du collage, calage à l'oreille, fond réactif,
+    rendu karaoké, <b style="color:#98A1B4">encodage réel de la vidéo</b>, export vers le plugin.<br>
+    Sortie WebM (VP9 + Opus), encodée par le navigateur : le son et l'image ne quittent jamais la machine.<br>
+    Le calage se fait sans reconnaissance de la parole — attaques, phrases chantées et comptage
+    syllabique. Le panneau After Effects, lui, transcrit vraiment la voix : son calage reste
+    la référence, et le bouton <b style="color:#98A1B4">Importer le calage du plugin</b> le
+    réinjecte tel quel dans la page.<br>
+    Ballon, portée de la dynamique et vibration des cris sont alignés sur le panneau
+    After&nbsp;Effects 1.7.1 : mêmes règles, mêmes valeurs par défaut.<br>
+    Le chant ASM et son calage sont embarqués dans la page : elle s'ouvre prête à lire,
+    hors ligne, sans rien téléverser.
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// =====================================================================
+// État
+// =====================================================================
+var A = {
+  ctx:null, buf:null, src:null,
+  dur:0, playing:false, t0:0, off:0,
+  env:null,                 // enveloppes d'énergie (fond réactif)
+  an:null,                  // analyse de calage : attaques, phrases chantées
+  lines:[],                 // {text, words[], start, pause}
+  sel:0, tapping:false, tapIndex:0, tapSeek:false, rate:1,
+  name:"demo"
+};
+
+var S = {                   // style
+  ball:true, ballStyle:"image",     // "image" | "dessin"
+  dyn:true, dynScope:1,             // 0 par mot · 1 par ligne · 2 par ligne + cris
+  shake:true,
+  accent:"#ffcc00", base:"#0a1f44",
+  size:78, react:65, posY:54
+};
+
+// Ballon fourni — la même illustration que le panneau After Effects,
+// embarquée en data: URI. Rien à charger depuis le réseau (l'artefact le
+// bloquerait), et le canevas reste « propre », donc encodable en vidéo.
+var BALL_IMG_SRC = [
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAegAAAHoCAMAAAC1jow+AAAAwFBMVEWpnS1xazE2XKDz6JOVmKBDbbT97Vs4OD",
+  "JhY2e+xczb3+EbOWrkyxCkn3W0usJ9go7Hv4aAfWNAPinBqgaGeRbGvnjo6OkAAAAdIDP86DIkRovK0Nb+/v5IdsE7Q2L/9KEpKzoXM11ER1",
+  "UiOGsxN0/Dw8cdKEdUV2Xq2DGEhpAdIDMiLU6cnaTXvQBpane2t7wdIDN0d4OpnjIdIDMdIDMdIDMdIDNHRjGNhTNVUTKpq7IdIDM8QVnTwz",
+  "LFtzJxazMw1x8yAAAAQHRSTlP//////////////////////////////wD+//////////////////////+O//////9E//+2ZtYm/////xD///",
+  "//SQO3EgAAOoFJREFUeNrtnXt72rrytk1Cc2jXavfhfYHEa1MXDMZAOB8CJOT7f6sfOViWZGk0kmxsA/pnX3tdbUN8MzPPPBrJTv2y0lq7yf",
+  "ta9Nn18R9XuX8458LHah0gHmDO58uGci3n835/MZnsLqDLFLyHwMXQlSA/BPrqArrYIbw4xG8jlXXgfTzcF9BaiBvpryPRvoBGJWrzNI2M7c",
+  "XqAvq0GVOhnSnsC2j5Wi36eoyDjxUya/rx37CR3c9Mk19AyyDj6vHgALZa7XQ6/xxWDVrueLwNwyDwlYG9u4AuDuTWge/4g+7XquGXOxx5cG",
+  "BnkMQvoDUh+0E47NT+YRee8TgcBbiCvbuAzlB4LcEsHW47/yQWlnFnOA08nYrfn1xAHzuU/VE1EcUalN0DY6OuK8WwvoD+8ELkoTwIquN/xA",
+  "sFeRzqxTEf1qsL6LQS9qIvVVzTrfuPOWV3iw/kbrc7aLfbXUG1nlxAp0FZlrBboSyQcZS30xYC7zvc9iO92gNBBr+AzoYyCBlBuRMGCMCPsp",
+  "VknQJq50KZ013T7T82lBVN8jvi5qNyJXK4NeozBT0R1+XR0LWi3AmBfN31gShOrKafLupzBL3qi0MZytcIylt5KB/iuIlnfEjrfjdtWXZ2oF",
+  "cLUSfVqoKhrMTsDqVVuasRx+32oJtRs3VmoIWFuTWsZUR5gIb8HsSovvoC2jBlj7b/ZEO5i83WqjDmSvXkAlo/mJWU/zGjfNBdSMh+V98s21",
+  "1AawWzMmOrgllCeYCD3BRYIxkG9VmAniSD2a/W7IJ5LNbYuFDGQfY2m8rzs7Pf7x8eem+Wlfr0Qe+SGxaDqWuZsqe+sCrj0vVACfjtebbvPb",
+  "Brv6aDenUBrczZ6sKsmAkatowTtgLyunII4AfZcugcsriABnO2P8wiZaMoN9tdKIorMznir9WrmGuyUwadtEamHctgrvqGlKFQ3jw7vQfc2t",
+  "+apu+TBb3rJ4P5HzvM45FhXZZTvn1zXh90FiPKVhfQydI8yiCY7SivK+hAllXqxZmDTmAeqJspGHNHUJl9k+1GO8ifQb0x6bOcM8Dc2lrmbI",
+  "EzginMkli+fZsZQ/5czwakTw50QmgjcjaI2Q19k5QtoVzRrMkSTeZpk3ZOG/Ngapmz3aQAGzQNKR+U10NKqxe7J8vd+YFOYK7a6uzAIJibwt",
+  "NV6+fXhxQX1VLjSJ8Q6BWH2bcuzb5JMHeFCbv3kPZ60yN9MqB5CWarwASluW2Wsiuz9Cm/r1lM+nxA85gDawXm6cts/4iUWdL9MwG9SxvzyC",
+  "CYu8elrEvauWBWYu4aBfPayZYy65L1Tx80t3VhizkhtNU5W1CZb5+zp/xBGu2Glh30JGvM6pyd3HJ8e3040vrLwe5wlBs011GljlkZzM1kMG",
+  "9mD0dcaNLO6RRn/+iYkwLsWCk7Bv3k4NrpEoNepGqPGGAW+CIPR19/PVVQgsw5jeI8GKaLWS20/dyDOQL9tMEIMucUirOtp803VErMydKcRz",
+  "AT0v9BlOlygmaLM2KH6p80MSdKs1fpPTzkCPq/ntoLdUqftQPXDvPUFvN69pDrenqKBVn/hEDvmKztj+0wc562GjOfs9/2DzmvQ0jHgmxyMq",
+  "AXaRbnoSVm77n3kP86gH5aq3qskoFeMVl7aod569thvp0VAfNnSD95iuRdKtCsQ2Lpg3EdlTbmjfNQkNV7osv0pPygGRE22KYptbUx51+a+Z",
+  "CuwMrbKWk4h6lqMG3MvYeHooF+ugWTd2lAT5g5IbtjF9wwmCbmYiiwhByLk/eqxKCZnsrS7+SKc/kxRyG9gULaKV84j2opFufBCWD+kmOx8p",
+  "6UFDQTzgiHBMrabHHu6mG+nT0UdH2GdNRMz8sJepKeCBv7OlK7NJh50KJtrMKDZsS2byXCXK3izHnaRcYcybE1MOhddNBM72xneLJZW4G5WS",
+  "rMXyG9BkYFCw6aDueWm17WVmkwdr/Zcx4eygV6WS7QK71wRmdtveJcUKUN7GyIQrrIoBephXNVJ2tng/l1v589U8vZ73tphzQFelke0ExTFd",
+  "pg7gQaWZuT2tazI3vn+W2zll865ewzAZ0I6cKCnqQltt2QydpNHQ1m5Wm/zp43t5i7PdepnKrlQC9LArqvte2MFmFtHQ226Zkzrmz0LnLdWL",
+  "P+iwXN22NO4dP2wMYKYyfCtLL2xjCn7p8rZm80q8xSBT0vAWg6bQc24bz18Fq7nULj/Pq8aVgsK+HXo8Z+BZtYTsHT9tAmnAPTrO09GzzoWc",
+  "Xm3YT2qJ+eoLcyOIVO2y03tXDWydr6Uvu1sm6oXkccjOg3xcteE+/NzHN39Lt+/e+u0KAnKakwnXBu22kw5+0WAjwNx2OZUhwKXlG6eU0J9K",
+  "LIoBc6U2HYcPY1svbtXpeyNGEH0+EY82LpKhfbho5rLwL9R9RhOSeZto3DWfMZSym3psNODb/4l7CY2TQEdFfQYRUKNO1th2mFs07W1jJIXi",
+  "XiKwjHNf3FXne17tmA/iOQY04xy7NN2mbCWeGEDUyLY8+5FUeyCWTBzKJnUKgdAlogxwoEuq+RtiErzDCcdeTurCLSy6OhW7Nb1Ja5Aek9Af",
+  "0nKcecIpbnaUpWmCKcu2ZlsSdK2b5NKAuzkdezBz0vHmi6PA8tNqp8s3DGZ+3ZRvQK004trVU1r9Nx6ia5e1U00HR5tkjbITqcmYkwdNYWBX",
+  "Or6tbSXB3yIyqaoL/ua+/+EeXuYoCmuudWSiosDuerryW9gQSrtfcVQcZOl/IHafJaLcccdJdvpZ2CybCpeTjTh52jcL66+vY/sr5FtJmsvU",
+  "Y6JLPbpPrq1LJYbstMkAlAx7rbKZYMM3/HL3MC48sKoykT2GxPhdy+6D0ncnYwrGW1SPbeaIHeUKATudspkgyzKM8CFSbA/L6u9H1t9g2gH9",
+  "+k0K1luDrRz5kZg+5yujt30Ct8eUaqsK/xgish5m++tghLlubRuJbxqpr0WCLQJHc7xZFh0zRVmCycPd3Web85bjB/reg30tkYj7srKndPig",
+  "F6gZ/bxnlhXXQ4o7apHB5zsK0dZbmefkgLQfcLAbqPNreRabsNcdYO54TQHrm1Y61QO6R7LGiuwcoTNHV+TiXDkGm7CXD+1qTz7//Xx3ycnE",
+  "3WV/bxTBzQP0lzLEfQu2UKMoxO29GQp5DzFd1U/fv6940u5mHtuGuoK7wdMehF3qCptmqUZtoWc2bC+V+/f/++hqODGwELxrWjL1/TCKX9Eg",
+  "r0PGfQK7TcxqXt2Nr+plBhh3B+Xzd4pZ0H5vhL3DMDTT59vqBX6M0qnEkSj4VdwR7JRziDoHnMI7eWy3I1He+NBPQqT9ATtOuJ2dBjdiRR4S",
+  "wHzbtgeWGOe+mNJehFjqDj9nnQScHbpoe2r6CmioSzrEj3KoXBHMuxnkkb/Yc7m+PkzNk15dySHKn6BjRVd9e/YdDc1kWumHVzd08Gepkb6J",
+  "hzq2bImZ7zZAZJruRp2/v7N71uVB1Vzpjj3F0xaaP/cIewcgDdx7bPqK6KGyS5kqowJpwFoDkNFuSOmaiQNW6/XAp6kg9oLGdcV8WfhL3ChX",
+  "MCNKfB8mmoZLuVNm10ZHc7+XGemnZVLWD+70qswlrXPOffQHEuBubD+vo8qBmYihT0PA/Q9pxp0zM5/3cl9ML+ncDMBDQ7jH90s1NZpFFqbC",
+  "0F3cgBtD3nKnwU9kqUtv/1GwLdY4qzF9aKs0INNcaV6C53JN7JiXPVkPNIcVHFVTJt310LOF/H02DsO7TcAnGOOmmMZfIKgJ4cG3QfZ4fhum",
+  "fxeP5VIm3//fs3ENBs1g4KhflQpvBblY5UdH+qMadMnGlzWzaez6Xt1rWQ87XICGuNa0VbeNnNie4//L01Tok4Uy6J/KaKK3XaJgHt0Frbq9",
+  "ZqRQXdQ4vuPyLQy6OCtuZcRd0jdXUFNc8059d1cYszJ7v3aNHdFoFuHBO0NecR7vTcQJm2PzmzWTvo1GrlBv31izwKtNiH7HZKwlktwxJXPM",
+  "rS9keB3tMizBvWaoUG7aCdbjHoydFA4zij3DDolGQbkbbfObPhXMysTTfSz1jR3RWD7h8LtDVnjAxjzkhK0/Y7Z0aEtTq1WvlBv0WDNj8Y0N",
+  "5xQdtyps5JDnA3GEjT9qE+M+FcSK1tADrSYhHo6DmQ/uoYoBe2nHHlmcLn3EhAX9+w4Ry4tdMATdwFFnRI+iun+JxxcrvN3egjRM2Fs7+t1U",
+  "4DNNFiHOifpL9yis6Zng1rorqq6CjsDcf6+oYL56lbOxXQRIt9ge5GtzuRM5VO0Tm3UDKMKs/0Vs9NBPv6nTIXzuNa7WRAV8jQMwP6zvWj/i",
+  "pr0CvUfhWG8yDpgZHbSXB3PDK9c1irnRDoW1LaGNDT6PllDnqF2n/GtFUDnrJwlGT9CtwoVJaeSh90j5ToL9BRcEVTV4uMQafHmR31/CY5Vg",
+  "WchWWc7XKEMx70TAL6Z3S/Xj9b0PF5yall+9wWxzI3uP2s3q4tUzjjQVfirPeDtkvc44COObcs2+emJJiZvWegPDPTQqUJZzzodRwOPxjR7Q",
+  "4jx8Q5hiGWGufEzSTf4qD35eWZbqpKIbZ5D2GGK9FNDvTIdatHAG3HeZRsq5IX0FAy7O76RpHYytI7629TOnGJ/gQd5S4CepkhaNJAD2opcY",
+  "aOw95Jj0fSKswrVTijQVMlmgG9dd37yBpzsufsWnEG7qtoshOA4jsMZl55nO3k+lIgr+gSzYB2Dytr0HFj1TGwSYLE7XDfoGPPX4PbN/Bp54",
+  "JvVJkPB9Il+gN0rMUyB71CGJ8adtgVeFtFtPd8A6btEjVVmqCpLpoBPaJAr5yMG6uhFWf5LYDfvOTe8w2UtqclxBzNda9RQwcDAjrWYi7xQL",
+  "MBPVcbJRqc4bvh7mQHYZm0Pa6VGLTipIZHP60ftC+WNei++l4pNGfhpZ5XwoMYN9K0XT4Vxvglb6jDOI8R6NgXyxj0Qt1A23FuikcApSZJWC",
+  "vpmmKMMUcCOsgaNLlxaGC1jdFEXA7nXctOtlfo98mXlTNu2nfDXMAVZ+5pxqBX6gYazfnb/1ByOwGa9rbLmrapNnqPaa7aPOjqB+gvR6LvZC",
+  "e4t7acrxSc2VFPyi95pSYMjJtnd5y/gMN0V0xz9Q66S9kl8faVk5ngrlpzFt7RK5LbXEDPUlDbH55N3hbLl+i+xTdXFOhWtqD7ysYqLc5/yz",
+  "i/pZC2o9KWr4xDnYP32B171i7JDPREKbixnL8prlb/W3aDwToFkyTW/rkWeIzoZjX3O+jIqsoS9EopuJGcxa/EuJKerLoRlGdva8+5kevkd4",
+  "DYjX7j9vgI6PsMQcdCzDXn3H1EcOYntgWmp7m3TZ/cDAugxV5x859foL8y94ubIei5SnBbcW7KTtDFnJ/T6Kpozo08lTfmPrlXbgjnx58GU6",
+  "IzAb1QCTH5s2U5/0+L843I3DbXywxnv+harMKV6B9cic4CtLkQi5+tFed1CuWZ5ex1CqDFKojMTe6l/8F20VmA3hkLMQRn2iaRpO3XNMpzkT",
+  "jXWmotxmduArqVHei5qRCjnq0+Z9Hes4XpWSTOLkKL8Zn78QdjdGcBuq8aNUA826aa878lLomTyohBkTijbpPz+DeK/IjnArMBPTEVYnqc/1",
+  "a6YTYXzxSKM+YiUCdxwIHZi84A9E4lxFSmwOen/abDOS7P1GaVDZ5icY6ezLPaLWkkzg/fZQV6rtialP42IzXngZJzLLdb7slwxlzWncjcj/",
+  "S42MeKjlM66RbobfqcPfFtzLEMe01FhhWO81htl8wSAd2mx8XSHzwgBTrMkrNk93kfcx7VTodz1EVvEJfuJy7genEzAa0q0CrrB9JhEs7Cze",
+  "fhKXGOuuhn9GwJlbmn2YBWFGgE57YxZycNN6yInBFdtJPI3I98c5Uq6IVhgU6D81s6dIrHOXo6ntr+HCRKdNxcpQl6peig1RtWas4tJWcbuV",
+  "1EzpF8qajvFmsDzRU5krOzB700K9DGnIVtVXBqnGue0uh+k2buYRK0/SG7PmxxqzcmBylwHtVOjfNYefd+z5Nl7oabAegJbHGrH+6FM9Rcrd",
+  "VNdDNxfWJAcU7rIDwZHgqOzZmySYanxzka3a+oX2j2CNhi6V1t0Qf3oNVGSffCGZwielXuRLeTmfs+Cdr2shqSuMdaoBnO3+w42x2ILSjn6E",
+  "Uxt1pSTJC5UwK9gzsrdQMtO16l4hxPGdjBKSrnyBZ7U7piAzhzp3ShXGSJ+Yacm6acGyfOWf0u+OROtDBzpwN6At5Ho26g7Tlb2STF5Rxlbk",
+  "/pinUVmZscprQBvQP3rIyNknjO4Gw5qzO3I7gLV5S5U7nGeQ5ZYuqne+Fskbk3SSkmzNxpgJ6AlpjiuyptoDU4B6fKOXJLPJ3e6rErytyRAW",
+  "kBegeeg1Y2VkrOnorzqHaqnCO35E2ntxJnbtf+5Sl9k8RdpSf1RUJMxfntHDh3VJlb1FuJM/e9NWgwcct+g62qgW5eOMdpz1O9KxqRuau277",
+  "0iHnfVtLG6QnP+fWacox3Kimrfqit4vRuXuYe2b7LrQ1aJ7PH6CsF94cwYSq+qfat28rWcHss59ksMQa8gq0QpuC+cwRWofO5buRS740CPLE",
+  "EvAavEVHBfief0z0tvY5poUUC3mbvFEm30whD0AkjcpoL7wvlrharZElFAf9mfPsfZfbF6UfgO2JxUjcYUnvP4kDmDPC+0UI0c7EVvAuPus0",
+  "iMBpqBngN39xoK7ngj42/heYyjcR6mMMxgtaKImGm4n4KTOJ8rftmsCegJ8FIUQ4c75nxXCM453i+maqL3olc4dhMncbixAyPQS/k4oEJIfn",
+  "KGXo9RFM65XTvlNhSZWxTQkibadX/ZgAa8T5W++Pga4jnf5Mc5N9AqKSYM6C8p5t270u5KHzTUQqucT8ldND58ICOeDzse59xA+4ozlKKAlj",
+  "XRdHelD3oub6FlD9iD76JpFpBzXhfJbRVSTLSdIW2i3fg14fqgJ/L5XuUDbsKcvQJxDvJ1xTzV/mRbIMUSTTS1SakPeik9Oal0xNrCAn0Fc+",
+  "7lwrmVk+hWSbFeI7mdQaTYL1ciuk1AL+QHM1SO2EDxeknhhQbxuZvgDDiToOjpBPRAuBP9vsJYdGuC3smVmGITXSLEFEZJzDnj+bBicDYKaL",
+  "kUo0W3Jui+dGBfuTUp5jyALxw6L86kt9rrBLRcitGiWw/0SqrElE6J8FJ9SQNNCvTbeXGOeqtbk4AWSLF4MlAX9Fw6VqJyStrCgMZy9s6D81",
+  "DRW22ggE5KMdrp1gM9ke5OqrasxEJM0UA7Rzp3UxTOUUB7ClOMDWipK0YPjGmCXsp2J1VOSRcW3L5QcM/OjXMUFs86AQ1IsWiOaK4LWt5aGR",
+  "XoK/imuH06JlV5OJPH1dMJ6Hbywin+dsi+Jmgy+OmmUqDjxupaJLhjQ2x4JpyjgH4zCeiWgDNtgOqAlrZWRgU6FtzCm5l7Z8fZLqBDAef7eL",
+  "xEB/ROOm6AKdDfpIJbeNN6bJSMzoWzyixZJw9EgzY3men+1GJ40H1Za6Uq0MK3xjbhNydszo4zcT/38Ojn4BHZW3FaDA1a6pUYFegrcWN1zT",
+  "fQwdlwjgJ6ozH6GdvcIs7Rr9/XA92XzA+pLG4f5OwJhZhznHsfi8TZLKClw58JXwwNeiXzShQWd1eUuIng9oRvsJqlYoiVi7MioIk21QjoLa",
+  "PFsKD7km1o1R606P3ACsFNGqts7+stFGfywBz88ck4oIOaCHTIaDEkaFlAK0xbcYFuijlf843V9nw4RwF9qxXQkRQbCyP6jinRSNBzyTa0or",
+  "MaiBI3LLjjxmp4PpxJQM80tifjfSthQEencRY6oCcS8xPTWV3hBHeUuN+O8n6MgnFWBXQDDOihEHRkl6x0QEsCWtVZCQs0LMSe02isysZZFd",
+  "AbRUB/B+ySRl0DtF5Ad+gCzSfuWIj9CxTcmb6/qmicFQG9hwM6FGfuEWOX4EBrBTTbWV1pCbFYcJ8TZ1LqZrD5KQ7ow6PClGgMaElASz71FF",
+  "WgWSH2FdC922O8d7BwnKPdnzXslXRlAf0dU6IxoLUCegwl7liIiTg/pCG4y8eZBLTYFCPffnY345G8EFwc0HyJRoBe6QQ021ldaQmxt2O8F7",
+  "h4nMewKfYsNj/bcXOCKtEI0H2dgAY7K4kQu+aEWHBWnMkdPnsdr4QKaFyJVoPWCugtlLglQuwroF9TePxl5DyEA7oiVmKqgE6UaDVocUArEr",
+  "cvCOjshVgZOUejn5JbxSStlTKgQ75EK0FrBXQAdFakQHOO2DU3arA9L84hPCm2hgP6vcpBRvccD1onoLe0JcYlbuKUeELOFfsD6KXkTHJgD7",
+  "x/vSsJ6HFN3FxFZsYCDXonvMdC8aHbgoCGC7RjL8RKyZm4DhVYiekG9DZRolWgxfvQ+on7SjwLGAkxz/r5l5NzZH56PVCJDeQBLQb9i92LRo",
+  "AW7kMbJG5P7JRcs1uT5kKsnJxJbDyD9+zzSowO6O+IcTEE6AU+oKHELS3QN6xTsj0zzmN4N0Oya6UO6Ki5mqBBL0Wjn/qJuyl2Sr4S98zaES",
+  "spZ+KVzECTGwpo2P/cYUFPRLPc+on7CnZKPFshlhVnd3xYGV4LWwW9EpkSYwL6O7K5UoCeowMaTNye2CnhC7RbHM7uNgyIYesH1UxyAHlmey",
+  "0lpg5oQXMFg16JTlvBbcJnwye2uLkC/Zsr0OOicO6E9L/49VQzuHdsCnolMk+MCWh0cwWDjnqrmhL0mEncVyYFuloMzm7oN4QrSDuqO3BrJf",
+  "HEMAE9TTZXIOid6LZmeKpEkLhlBfo6nQKdLudx0JAuL+WrneHWyjEP6Gjnqo8FLXI/YcP281N9wxTor4Bek6tWCsB56DfAlSrpIdhaSZVYmx",
+  "mSFXL+KWiuQNBLgfsJJiFRQMMFmljcnfw5qzCne0EoUWKOlhJ7ZO4TdyFbrFFHgp4IzBI4CflJJQYnbsdyKyNFzmMRZu+w6P8/TV+JbfQSNy",
+  "KgxZkbAC3qrcB28PNTMQH9TWJxf1piPcsCnR5nN1GbB77/0vxYL76X/lWwJAn2wDmxNhjQ30FbbIEEvRKYJYgWmqnQxPpsCRP3xq6DTo9zmK",
+  "DcpFYc69XUQLdAJVaR7E6SgJ4CAR0KbDEItKi3UnufbOZuSgo0l7jH+XIes22zx1CmOafnnUZJ8LYHbmY0JQH9FRli0IHAFoNAC3oruIV+TG",
+  "RuaYG+YX6dab6c2XAevDSz56xQYmtG8wjOQ39KGq3MLQW9wPZWPltOrrCdFbE+W7ly7rRAzJlwJkmwAg74JpQYKqAlmVsKep7ciAbjISonV+",
+  "rO6pqpQ2Z70GlxHnog5mw4b0FPrNeQKbEu289rZW4Z6FXyyhKMEqNBX0msz8/EvbcSOClxdkdAbZZy7oztmBMf0QF3oQcyJeZDnH9KMrcMdC",
+  "TFsEos/lSJxP1vYeK+telY0uJM/zMCzELOHd/WDZ2CZ62kLTQJ6C0E+pckc8tAJ/etMEqMbq9knRWXuN38OHc8MGtLOHu2bih5Zq9a3ie7my",
+  "GTYpFbksjcEtACKYZRYlTuvhLe9BklbqvOKiXOQ0U4Q5xt3FAfVGIbWQv9yD0yzcwtAZ2UYiglFoMmiftvYeL2LDqrlDhTXZX3os3ZeBeG/F",
+  "xxCy1P3G3uyg9whzKZucWgkVKMKDGmsf/GJO7fUOI2eVopcR4pwlnB2dieJ97nXi9xc62VhHOk8/p1HOhFwhUDHxarD68AS+y3deIuCmdT37",
+  "ZlmLgH3PfLBWdLJkjQy4QrhlRiXyH9rYFK3GFenKl/RZy21ZwN9VgIttCO1PtsczlQIsXuhDuUUtCrxAYl2FrxaeaK7GXcgYm7VQDOA2PORo",
+  "0hSdyOZuLmvBJZ5vakmVsIup/YoIRUa1eqGzxYcXfy5yxO2yjOh8J2vMTd5r9csP25QoJONNHqOTHRuxLFexkWiTul+mzJ2XsxVhimiZtvrW",
+  "QBHYimAuWgJ4l3Z0AfeiBNM3cizhaJO3UdZsi56RkW6bFp4h7wtynqNtFi0H2+iQZbK2zivuHGlTul5Rz9Cd2U5MJWyVqauJu80Hdh+3OFA7",
+  "1LjJZAz0va8InfNkk87jAnzqE9Z1PQUzBxyzcnSYoM4YCOvkjzOg50oonWaa3iT7V5uLm5jijf8EMyfu6+pznn6M9oyu4tmLhfpZuT/K6VtL",
+  "eqQplbAHrOT/nqtFZx4v762saMmV9nnA/nThqczUCTWidM3D154k4oMVlAA020CPSOtz+hb6fceoeHZKb5cHa9NDhHf0rvlwhAj7siT9yDRN",
+  "/ugjNEfSRoVOaWtlYD1Liyrsed+v6zFWejGl0FPe69OnHHlquJFBOAnnP2p5ZX0obHlT2zmw3SmhsapcPZBHQHTtyetFdNKjEjKZYEvePtT6",
+  "3WqoEaVw7y4Uz+2MCOc9RH63xdo19hrZu4E0pMxhmWYknQC26GSMsr8VFDMpr7PqnNe3o2+xj0X9IXlFNwqsSRJ+6kElO4Yo06EjQic0sDug",
+  "kPydwajQOmNr9N/h1bzr621w1bYq+ebI47TtwjFeefsBRLgOYzN/T1lI6jwuPKrXw4hzb7z0wS8HV/DxIZG93OKqnEZKCnsBRLgEZkbld10u",
+  "8WHlfu5MJ5nBrn5kC3uwpAS6wi38t4TM5Ef4c3KOd1JOg+65ZomZ8N1LjyNBfOJHF71pxfdFuHEHwwUIH2k+rVhTcoJ1jQnFuiE9ADMHEbKb",
+  "EMzku+2HImfxj7ixA3Du6sgMRNJUFZQL8AG5Qi0BPWLdEJ6DZ898qtwQBOiuefzed6EyLd0+sRXbgV2cg7q0fBHKKit+pjQasz91j2BYQT97",
+  "NBC53ifQYB1EHrcX7R/MaSAv0K7lm1gRbaVQZ0IJ3ylYBeMjuUOrsZbfB7SxJUJxfOYyhx63HWzdzE+pyB1qegs2oKNoBMeyse9IqdLTEJ6D",
+  "34Fs1pLpyJNe/bc37RS03kK/amW6BJs0o9s++KfasVFvSCnS3RCGhYie31lViq9w0BiluTM/nzOM1NOmix9QkVaEELLQvoe2VvxYOeM1OBGg",
+  "GtUGIbbU8s1fvDgIDW5fyiNzhhXqCbgqutvyvMkgkWdGSLjbUDuoG6j7iVD+ehXInpciZ/AfeVneIK9ABI3HSJcGGzZFnHgp4wtphBQEve3X",
+  "SruwuQ7r2PvlSJaXN+0apBW/MCLUrc3xVmyQINus9saBgE9Gs6rVXK93tKA1qbM/kbqK3oDlyg14D1KUrc0oD2FftWSdBL2hbTCGhYiZFvrp",
+  "sLZ/LtfLHnrBXQ5NcQF+gKUKCFiVsV0H00aLa5wge0QolVNFurtO9llgW0Puem1iGTAGdxD5CJWxrQL2qzhAPNNFcaAd0FPbGeZmul5DzWu2",
+  "c9lAS0AWdfZ+QtBC3uV6hACxP3d3P3kwfNNFf6AS15z/Wb3sS+knMt0OIcSTHPnvOLzoFZIsTgPWhRgRYmbmlAtxBmCQeamTmQ58Culie212",
+  "s81Zxrepw74h7agHNzoCEqyb8l3px/gwq0L8qBtgFNgV7RzRV+26oNKjHilQzT4lzT4kwyqD1nX2NyIv494CExHyjQrPlmG9AU6AW9c6Ud0B",
+  "IlttdqrTCc49SNusuvJZJiJpxfdC4vCXBOiahAPwoP2lsHNAX6q0SHegE9AAd8SUCPU+NMxBjuvUaizG3CmShujBKb4pwSkcVNHigrXq0Dmg",
+  "JN+5/ogG6CpUgvoHGco/Yq0DKnrDn7GqfGSP+3Bs8lCQt0W/hzXEVAz+t40IoSHYo/XBc0ucnvNE6R8/sri8IQaaeGycxtxxnhBpDZIQMh9i",
+  "j+OaqAnmiApks0epZb0VrNdAI6wHLWWUEic9txRuzLkEcldsRmkFNCAsd3Uw7oGDRcoiUBDbdWZDdDp5qmyjnqon07zi8e/oPFiclAiLXFyj",
+  "6FgI5BUyUa2AHS2rWaJY4ZYGYx0uRc420xI85EiGGaxAA8fxYLsSZkiYW1tAOagKZLtFxeSAK6Zx/QFOgUObucFjPjHAlhzDd2BAvuNapAs6",
+  "XuexoBTUDDJRoO6LcUArpW89LnHH17PCvOOgU6FtwGQkzcWaUT0AR0Pza65dHW1vFK9AKazEumyZkDbckZsS1DHG7FhTQDsEAPcQHto3toGv",
+  "QyNrrldUf8wSReiaMX0F+Cz0/1xdwMaFvO6k/WQQpuoRBrSgqEa7cPzYHexXvRwJauVkBvNOcNPl7PnfJrmmnQlpwRc5/xFSkzcGtS6IhJOi",
+  "spZ82AjkBP4us/5QJDXFEkXsleN6CzWJ1YjNlyVgvuuLGCbwYUF2jZnomruLIEGdAR6K8SHYhAwwEtfi2uSUBnsUh7ZcsZsZXRshHcbckPch",
+  "Wz3NiAjkDPyVkcrFlShoCODRNbzjqN1QYcwBALMUlnJVdiU82AjkAviV0ifVhdoXSQmJ9kUizfgI5kpGfXP2txVtxH0wULNK/sZZx/erhJMR",
+  "70LrZLkGZJFzY/exa3l6e5qtwd2ya+J4rzEG6sYMFN0iO/+yNVYne6Af0FekLmApG9lcL8JIlqnDNo15izb8j5FbzpU+h8Sgu0FHTUry93mq",
+  "Dj0X2pcC1lQLN7Ykb7VSjOsX+7hxurNthBB0jORN8v6pqgAS02Mgno54IENDscbMYZobc7cANNLt4Sc5YWaKkSi/LHsq4L+kuLdf6RmgADnY",
+  "B+8Awva840pDXmw6j3Zwx1ODtwY+VrFWi1VzLRBk2uLpGqmbZOQM8MLizJrEp75vOehz+w1fgJkt0dRWOlXaBJazWv64KOfTHcvlUX3p6Mtj",
+  "OKENBEJ+Hn9Ad6O+NuC8lZLLilBfp7al5JDHoR+WK4fSvF9iQxS8JacUhrn7vBDprGnNdgdpM43MQpSUyXpthaEdD9aIwIJ8VUAV0QsyT+to",
+  "6CKva8JP12K4yrR3GGG2hxY0WeZeJYgKvahsZ7JTHoebRHibK5VQHdK4b7qRJOonPudDjj3gYewJzjBroNC7HEFQpptlYEtPSsSVX0bSxbQG",
+  "M5M5gbLdTG+Ag2xBQNdCzERmjOoUFrFYEmBijK5lYF9INXFLNEizOLGXmaewQbYoqdyViItdAFmiixiQFoYoCipNhAEdAzs/cp5MuZw+yPU+",
+  "G8hhurR/mQkhT0yKS1ikAvZCEolGKKHjraiPYLGNC+5L5en3vBaOgehXNXOryiVmIrE9B9SbYSumIDhSnWK1ZvJbLtmesPfH/A7XAFyLG1+O",
+  "WHsweDnclYiCUelbSFJvdY9OsmoOcS4TcUSTFVQBdYitFnBPzPlXhXcMPH2nkqzgqjJBZiyUzqquaHlnUb0GPJbExXJ6AjKVbE3spNYuWXF7",
+  "ppc5Y00G25K+Mqxw0mZqAlMeiKpJgqoGeF2beCdo2tMSs5OwrOTbnLKuVMbmue141A7yRvfZkKpFhbFdCV4koxFWm/ii83Ks4qQywWYmN84h",
+  "6aeWIE9ERy4MQXSDHF6GeRpdhnmfZlmAOddhDPua3gXMVzvvfNPDECWtJdiZroNjz6GWcst6Cga24oKtTBUOsDW3MGju25yhZ6WTcELemuRE",
+  "20KqCjDcqgVuA1DNg5sulW82sZcxa7gyrjkxJiNXxnZd5Cc6D5bOslpyKUAf1aoIkDMIMPwzAIpmG4NRCNeM4DBWfBxTfqxN2vm4KeC+0ZUR",
+  "PdhU9bESnm1U54WXMGBDeQuKf6g5886KVQ/gXJJlpxfLLYTXRhOD8Cx/bkiZscyJ3UjUEL9ZOoiVZtZxAp1rlwlhpikOAGAvrFLnHToMWZW/",
+  "BVlO5PRm6Qfw6cZ/Dl5FLO0D0Z6sTd2JmDngjrKpC5X1WZe3qqmN1AxXmN5tzS4WyduCnQgTJzq9zP4jfRtpxb1pwBhxso0PcvFt4nDFqQud",
+  "vg/etU5m5dOCs5i+aI1VaJeeJ+By30S4KkcOyqzJIoc1fPnrNkshdsrADOVfvETYEOFZm7qQzo087c8RiSmnNTwVlkKLlqq8QicctACzK3sr",
+  "c67cxNjZuZcn6EOMsLNBnYt0nc76BFYweCzK3srSKf+yQz99iD58MwnLvQwQBXvTlpk7gloAWZW91bvZ6wWxLvYx+dM5nv7dctQQscUEHm7s",
+  "JXlhR+5CB3zgPoQJecM5GAy50taIGESmbupmrfilzCfoJuSWyHic/dWHMGCvSvdBI3BZr+wcnMPVDtW5HZkvGFM8RZeKEowhKzTNxi0Ntk5l",
+  "ZLsdmJ7lBS7bM5Z9AogQr0i9VUCQNaMBo4Stg7aikWlejR6XKWfMtfs+Mcd1Yre9ACB9STZW7AFYtsseFpcaZsEhlnD89Z+HQAzuT9lot6Fq",
+  "A70swtd8VIc3Vattg2puhkxBkQYuSnz+uZgA4ToNtKVyy6cOq0bDFqDHxmzLkJX3DkqocNGrtsQLcSU4Fd8PWT9BnKk2quYrnt7VPgPNLkPE",
+  "qrs5KAFthi6ib64fSaK2rKQGKTPOyz5Bym1ll9gk6M7ydtsegVzADnveRYzym3VdScfgacUy3Q76ATm1dJW0zdREclOjgZzpTc3ig5y+YMKM",
+  "6BJuf7VAu0EHSiuVLvRJMuOjwVzpQMe3tIgbPwxrLvmA56Us8IdMckc0dd9KmU6GlD1VbF9xkYc4YC+le6BVoEOkx8+oZac7+eVImmZdhMcS",
+  "E5wPnRnDOxuOf1zEAHfHPVVNufURo7jS6601LKbYrzQMq5a8yZ7EGnVaBFoBPNla+2P6M8dhJdNOWGyeQ2tY2RBefYKZnUMwOd3LlCZO7ILj",
+  "kFozukZFgqnD1tzncpWtxS0FO+8GAy98PJTBFR5Vl6lvBVj3NHl3OYfoEWgG7xmbuNyNwno8Xo8iyTYZTt2Tbl/B0jxJa7DEG7Caenq3ZLIi",
+  "0WnFB5vpVlMAfBudkw5xwLsVU9Q9DSEg25JZEvVnYtRnXP657SJsmIcxZCTAB6yteeNsItOQ0tRpfnN8VXGrK3lZxxQqxfzxR0wH9ZB4jMHY",
+  "3ul9oXG3vKzWe6fc6I8zQTISYAnchKiB1KIrrLzJl6t6G0PPc2CDvMinOYjRCjQX/W1zFfohGzJWSP0j+NtC3brKLb54w4bzMSYsnBg4TR7a",
+  "sOv1PHKMsrujvUfYJSY4hqqwYIzr4+51hwT+oZgw4kmRvU3KUX3ZQZ5kl/UwfDua16k5KLEtyLetagPQlo0BaLJEpY/rS9fn2waKvsOMefo1",
+  "/PGrQrKdFwcxV1V+UU3bTafush5HZWnO8yE9xJ0EO+RKOaq+h4XSlBUyaJ1PSk5ba8rbLk/Cs7wf0JekX1Rgm7BNVclbi7orxtIG1TuxhdOe",
+  "eBFedYJ6zq2YCmD9nxWqyJaa5KDLqKStvUUK+8raI4Bwacq1lzZkHz2amtPP1O7V35ZVZh8rRNy7ABhrPkmKGLa6AX9axBu4K5wAFi5oD4JW",
+  "Vro6mtKiBt42RYvC1pxPln9pyZqy0SWgzVRZcTtEupMOCbTMuwzDjHDXS/niHo+LKaKTcXiCzRsxKejKbfrSE3SR5ebzFyO7bDZBt4+XOOQW",
+  "+TWgxXoiNjrEx+CeWFyb1txg0DZJgl53gUMKPGKnmhHO+L4Up0+UDTTRVUl55RMqxtyfnuKJxp0AlfDNdFlw40Hc6ACutVUOW5rdquwnLOrL",
+  "GKQJPjlGOJFuudFGgmnCvy341ySSDOg5Jwpq9xDrkshZn/LB1oOpxv9w+Y8gzIMLUdpuA8PRbnGLQfHfBvc3vRlRMCzbzIDghn6ggdJMOots",
+  "qMc/y1m9QzB03un+JFdxfVRZcINNM7A00V0z0PUHJ7ZMl5Uc8eNLHG+ESlet9o2UBvseFMzZLgZJjMQ/heHM7Ue6/4Ky2i7+vDaYCmnW0wnK",
+  "k3AoPlWd1WFYkz9SY7/r5ApF1SEtD0RhUYzr03XHmm5LYt5379OKC/GmmPq0k+auigHKCZngoMZ7qr8lEyzKytOjZnCnTDUIsVHzQjwsBwfp",
+  "jhynOTktvl4Ey9KJz/9bBarPDTvkMP2TuzaRtXns3aquNzfge9AkErORd8m7IToMOZTttAV4WQ28Xj/A66zoDW1mKFBs1m7TU4toxM25QMk7",
+  "4opnicP0AvAdAVNehecWfGGK0NijAmbYOcKRm2NZLbuXD+AD0XgR6o3hVd/OHAcQudtZm0DXVVlBvmm8mwfDh/gKZld1dbdBf1NjnGIWncOh",
+  "hBqQxnexmWE+cP0LTsHmgdxinuOXi2ODeewXCmt56x5dlQhlGf66icP0CvrER3IS8CDeniDE0LcYPbYNqmyrOpDKP2n4/L+QN0XQAaL7oL2E",
+  "gPfY2s/YANZ6o8e2MzGZYf50/QcynoCgZ0wS7rZjWYp5CTtApDl2dDGZYj50/Q/eSv6uNFd7HukxszGgw4aZOcJIFMEro8B4YyLJ7rPT7nT9",
+  "CTZHfVxQ0GMscpq0WT2o2NwsClJwzgtE2V57BWQs6foFdJ0Ginm6pyuRfp+H0jn8VZ9TWlwxnytum0beqSuD9fjrr/LARNeWOaE6BFehc8h1",
+  "lVnFkvzEembdPumTpHlwvnL9BzGWgUZ2KCDouDWWGEvUvIW2TapruqkSnnas6cv0Av+DayjbmNKGGZBIXBrNJgrEcCNs9U2papEGXapuyw7O",
+  "c9IdArS9A5524e80bp5+HD2bc3t6l7K7Kf34ZB1yWgnx/0cndYgIZKKbX5cG4i1bZpV0W3z7lxjkDPuVZyoAc60t1+/pjX6kaBCWcfm7ZD07",
+  "R9H3/CZW6cI9ALLotp7F0x9z8cW46xZieio+LCGU7bA7XpqQ5nqn3O9rwkCvRKDHqPBR1tVR41pN1QH7NGOFPetkXaptqqfo6cI9BRJ902aa",
+  "Pps8RhbgoMhVkjnFNJ2y61jdav1wsAus+KMa02+uMJetA7YTI4X8OV5sYGU2aYcAatbbp5Nk/b9K74ol4I0BPWMNEGTUI6yCNnI5S2eThL0j",
+  "YinO/vCsOZgN4xv75mG02HdPZbG2M+ZzcqKC1BT3kqwnmgTtuulgzLr63iQUcN1sAUdHzxWue4wax2wZIbVfhwNjdJaBm2zJ1zDHpB524T0J",
+  "EPKj2MlEY3xVfmhveME4zP+HCmv0kj1xQz7XrOd/XigGZyt6Yxxh0rbmUjyDojr2EgtD9E2BodzrQX5g2Nw5l2w/r1eoFARw3WwBh0PDPbSj",
+  "+m3WkiZSNLM7cfCffOGBXmapbnRb1YoOnc7RuBjsfsUs7ebrWVoOxVsE0+I8K66HC2UGF0ec5rt0oOmjbHdB3Q5Htk0tPeHQHlxmaGLih4EY",
+  "ZRYRjM9GZVAWQYDzrS3V0TB5TvseSmoWYrJcjYGsHMtc7gvjMbzlOLtH1XLBmWAL2I7+0wBU3f8+LZuqHuMKm+3ivzTKPl88zCWeKFocJ5+1",
+  "IwGZYAvYvVijFo5kYff2gTyoKE/T6M39P4LEzWHuDDWZyNvqM4h8UrzzxoMt5tsKchrNMH1KFJAh+HgQjyIWW/6nyQt4ZhOG/Nw5nuqgpTnh",
+  "OgJ+SZ6FvdsrLYCIY6rDtDcSQfHv+bnjR0DLO2VTjTabs45TkBOmqlu1ag+Wd8eHRVTLc1Hk7FgWxAmd2mUmRtxgqzCmc6bS/q9eKCJnMmdq",
+  "C54vgJOxzKzk+Px+E08BvSdfum3eZtGqmGMw4zrbYLVZ6ToCM5NrAEzcvd+DkGQUitUQAB/hwB06rLotoBY6b3nSXhjMvaRU7bCdDclWMWoB",
+  "96z17DdnmVmYEcZH+wImunFs60SVKkrkoCmr2Jav3wkB/qzfOrUSq51cna6nBGYr5vFTltJ0Gz99ZsHizXrGIYyc97sx+41ynOzHiB2ApDZm",
+  "2XvrOugGlbAHqSKuhDWDsbzUCuzF6Nfxj7s3Sytj+2wMyosH69XgbQzJ1jKYD+YF1ZYxDfbp7NGScNEvAABueENYS+DhKzW6UE5XJSLwnoRe",
+  "qgP3OqU9nISvZ68/bs7G2/TlyV0MnaQccC8z09wVbQtC0CTYd0iqC/aOz3zjO1Zvv9azr/MCf82hpZ26taYGaaqsKZJCDoRYagM1q6mJmsLZ",
+  "oK+47mTN9mVixvWwmaCumSgOYcV4UGY7O2SIR9Nwvnfr1eLtCLcoHmGmeFBuOydmiD+Z4J50m9bKDjkN6UD7NOcRY5YXjMjNjO9/ycKehFaU",
+  "BzmPWKsyBra2BmxHaj6OEsBk3ssc1JYWa2L0RZWwOzy5zLnu/q5QQd2WNerzxKW4mZ0WACra2D+WdQsnCWgCabWJWTwcwV57ENZveXV7Zwlo",
+  "Emm1j7U8ScnFnUwlx9KV84y0CTkL4tYPLmPG1dzF7C19bCzIqw/q5ebtCkxXorGua9NuYuXJxdrcVc+L4sTTjLQZPtSqdQmBObnpqYE8VZDz",
+  "N7OKhE4SwHTZJ3gZR3j++ndDH7W4uczW07F9zZxoPeLQvWTCcnkzQx84edNTG7U+bnL+r10wAdJ+/nQpZmbcycBtOkzDokpempMKDjidD8e6",
+  "wZP6LS1cTMTYTpBrO7ZYpzqUSYGjRR3jmX6V7Fs8U8ssP8kynORd+P1AdNbJN1jqSdxCDpoGmFWZeye88W5/mqfmqg422sSm4CjNfZihtIBJ",
+  "iZjko7mDm/s5xZWwk6LtNvxQhmpQLjXDAOsz5l/lazRb1+kqBJj9WYFSCYu1aYDYKZnS0om0OiA5o6onNc0rPk2L+yNEOYTSjzVyGVtTijQO",
+  "dC+vXN08/Z3H4zjdmIMo+5vMUZB5oaFXTyStmNgTpnyzG7qWBe1OsnDjoWZJ7zV+aUHcHhHaXOTgjtuKFyU8Fc7uKMBU2dmXb+yhJ1T3T2Ui",
+  "3AEqWZYHYvmLVA06SfskItpIwJZj5nR562mxrmVb1+JqCpsxvOUxaoxZQHBsH8dd2VMWU3fDlNzDjQcTvdqDwd1l/p1mURZUTKbg4SmIfGGl",
+  "toj5S9o9IGTZPePH2gTsn9fn0WHp32m/oC7ENo21DmPO0D5km9fmagadL/+e8navuwdt5uG2YpOxnMBwVmA/l9h+qkMWNB04rMc56erMP61R",
+  "Ffb4KgLAhm/5drt6r8VXanhhkPmr6ZqvIUof7LTHuJQxlHORnMrdASM6/ATkiCGYCmSa+fngxZyy80wVBuJq+f8+62dpR/8qX5JDHrgKbvQi",
+  "DpW4c1cGsNhrIgZR9y9n3KOftEMWuBZq6bqzw9Max7qposSdcWlBt3VTvK978SGeI0XDBb0PXVkr4i/ekJBbvnPAN3jfkoyoNGBsF8x/+TJ7",
+  "B1kRLo+o6+LHTzlFgc7P1MfunUhyvSNKTs2Qbzz2Qwn57QtgDN3kPm/b+nJxHsA+397FlxjRwqYQspN15Cy2AW3PB/qqXZGDSTvhv/4fP3fx",
+  "2nUlmrbnvFQRbW5YY/+mlHeXuX+HjL0y3N5qC5u543/316cpx3vJX1GnOd7wCVrx/bwou87VO24PVKJ56zzUHXJ0vDq5nVRfnHx+p2xde6h7",
+  "aF+aVxfjnbAjSrybCQu38+1w/R+kOWBPKBsl1hvhe9eme+qJ/Lcsz+mlZQdwlkxZJBzoby2QSzDejEWxlsGR8gZ0VZmLHPKZjtQNdX/ZQQA5",
+  "FsT3k7FVFeLlb1+gU0On/PJYTxiEHI3t3QLmEP74TavX92lC1B1+sLvlTrIe4CGeFlarcttf0lfl1af1I/y+VY/v0EahRrmPEhlMOfdtpLHM",
+  "qHwryr1y+gU0PdhQh3FfqtZRfK98PRS+NCOQPQItQ86y4C8Ee+Hg2zgXzmlFMCLZFlSLgkkkdDG4G9De9kkBv9c6ecGmhls6V4o1kwrVoF8r",
+  "QltdmX56q+MgJdr+8WRhZ4a2QjvH5WwRfVzherC+K0Qb9ncK2w9g6MLXRXNRy1oO2yQyhfEnZGoN/Deo4K47tp9ad5FP8atRSvI76Ecsag36",
+  "u1IoUbN8n31eF01HpRfosukI8DGhXXfiuYTofV6r2abrU6PfBt4d5RfIF8VNDvrCd9rDZrva/RlFnBx3/UUnXL/gVyDqA/k/i8cZS1nF+EV5",
+  "6gv2AvL4zPAPQH7Ek/i9Ce9xcXL6RQoAntlGJ7fkFcYNAEtznvQ5o+EL4k6jKAJpp8sjgQxyBfHuK3359MLiFcRtBskL+vPrsWH//xErzprf",
+  "8DBHGFHvs3rZ8AAAAASUVORK5CYII="
+].join("");
+var BALL_IMG = new Image();
+var BALL_READY = false;
+BALL_IMG.onload = function(){ BALL_READY = true; };
+BALL_IMG.src = BALL_IMG_SRC;
+
+var FPS = 60;
+var $ = function(id){ return document.getElementById(id); };
+
+// =====================================================================
+// 1. Nettoyage des paroles collées
+// =====================================================================
+// =====================================================================
+// Chanson par défaut — le chant ASM fourni, embarqué dans la page.
+//
+// Le MP3 est encodé en base64 : la page s'ouvre sur le morceau sans
+// rien demander, et rien ne transite par le réseau (l'artefact bloque
+// de toute façon les requêtes sortantes). Les timings sont ceux qui ont
+// été calés à la main, donc l'aperçu est juste dès l'ouverture — aucun
+// recalage automatique n'est appliqué par-dessus.
+// =====================================================================
+var SONG_TIMINGS = {"audio":"WhatsApp Audio 2026-08-20 at 14.39.45.mp3","duration":67.32,"language":"fr","model":"studio-karaoke-proto","words":[{"w":"ASM","s":3.952,"e":5.303,"line":0,"lvl":1,"db":-16.23},{"w":"Tous","s":5.42,"e":5.62,"line":1,"lvl":1,"db":-16.88},{"w":"en","s":5.64,"e":5.84,"line":1,"lvl":1,"db":-17.62},{"w":"route","s":5.86,"e":6.05,"line":1,"lvl":0,"db":-23.17},{"w":"pour","s":6.07,"e":6.17,"line":1,"lvl":1,"db":-15.08},{"w":"le","s":6.19,"e":6.29,"line":1,"lvl":1,"db":-17.71},{"w":"stade","s":6.31,"e":6.4,"line":1,"lvl":0,"db":-22.92},{"w":"ASM","s":7.267,"e":8.704,"line":2,"lvl":1,"db":-16.41},{"w":"vin","s":8.829,"e":9.146,"line":3,"lvl":1,"db":-18},{"w":"chaud","s":9.173,"e":9.49,"line":3,"lvl":0,"db":-20.03},{"w":"ou","s":9.518,"e":9.835,"line":3,"lvl":1,"db":-17.89},{"w":"bien","s":9.862,"e":10.179,"line":3,"lvl":1,"db":-16.81},{"w":"truffade","s":10.207,"e":10.841,"line":3,"lvl":1,"db":-17.49},{"w":"ASM","s":10.896,"e":12.241,"line":4,"lvl":1,"db":-16.76},{"w":"tout","s":12.358,"e":12.618,"line":5,"lvl":1,"db":-17.88},{"w":"le","s":12.641,"e":12.901,"line":5,"lvl":1,"db":-16.77},{"w":"monde","s":12.923,"e":13.183,"line":5,"lvl":1,"db":-17.02},{"w":"est","s":13.206,"e":13.466,"line":5,"lvl":0,"db":-20.16},{"w":"bien","s":13.489,"e":13.748,"line":5,"lvl":1,"db":-15.35},{"w":"chaud","s":13.771,"e":14.031,"line":5,"lvl":1,"db":-14.79},{"w":"ASM","s":14.054,"e":15.592,"line":6,"lvl":1,"db":-15.82},{"w":"on","s":15.725,"e":15.992,"line":7,"lvl":1,"db":-16.7},{"w":"va","s":16.016,"e":16.283,"line":7,"lvl":1,"db":-17.71},{"w":"bri-ser","s":16.306,"e":16.84,"line":7,"lvl":1,"db":-17.54},{"w":"des","s":16.886,"e":17.153,"line":7,"lvl":1,"db":-16.66},{"w":"os","s":17.177,"e":17.444,"line":7,"lvl":0,"db":-27.98},{"w":"Jaunards","s":17.467,"e":18.279,"line":8,"lvl":1,"db":-16.08},{"w":"fêtards","s":18.349,"e":19.144,"line":9,"lvl":1,"db":-15.7},{"w":"allez","s":19.213,"e":19.799,"line":10,"lvl":1,"db":-15.75},{"w":"les","s":19.85,"e":20.142,"line":10,"lvl":1,"db":-16.52},{"w":"jaunes","s":20.168,"e":20.461,"line":10,"lvl":1,"db":-16.98},{"w":"et","s":20.486,"e":20.779,"line":10,"lvl":1,"db":-15.53},{"w":"bleus","s":20.804,"e":21.097,"line":10,"lvl":1,"db":-17.01},{"w":"jaunards","s":21.122,"e":21.826,"line":11,"lvl":1,"db":-15.92},{"w":"viandards","s":21.887,"e":22.977,"line":12,"lvl":1,"db":-16.28},{"w":"on","s":23.072,"e":23.324,"line":13,"lvl":1,"db":-17.35},{"w":"est","s":23.346,"e":23.597,"line":13,"lvl":0,"db":-19.79},{"w":"tous","s":23.619,"e":23.871,"line":13,"lvl":1,"db":-14.82},{"w":"avec","s":23.893,"e":24.397,"line":13,"lvl":1,"db":-17.25},{"w":"eux","s":24.441,"e":24.693,"line":13,"lvl":1,"db":-17.44},{"w":"jaunards","s":24.715,"e":25.516,"line":14,"lvl":1,"db":-16.41},{"w":"ricard","s":25.585,"e":26.372,"line":15,"lvl":1,"db":-16.15},{"w":"un","s":26.44,"e":26.66,"line":16,"lvl":1,"db":-17.48},{"w":"mélange","s":26.68,"e":27.32,"line":16,"lvl":1,"db":-15.9},{"w":"fabuleux","s":27.34,"e":28.2,"line":16,"lvl":1,"db":-17.2},{"w":"jaunards","s":28.22,"e":29.07,"line":17,"lvl":1,"db":-16.11},{"w":"bonnard","s":29.09,"e":29.94,"line":18,"lvl":1,"db":-15.42},{"w":"ce","s":29.96,"e":30.15,"line":19,"lvl":1,"db":-18.85},{"w":"soir","s":30.17,"e":30.58,"line":19,"lvl":1,"db":-15.08},{"w":"on","s":30.6,"e":30.8,"line":19,"lvl":1,"db":-14.58},{"w":"à","s":30.82,"e":31.01,"line":19,"lvl":1,"db":-16.96},{"w":"la","s":31.03,"e":31.34,"line":19,"lvl":1,"db":-14.58},{"w":"queue","s":31.36,"e":31.9,"line":19,"lvl":1,"db":-18.33},{"w":"!","s":31.92,"e":32.14,"line":19,"lvl":1,"db":-16.81},{"w":"ASM","s":34.1,"e":35.86,"line":20,"lvl":1,"db":-16.49},{"w":"Tous","s":35.88,"e":36.09,"line":21,"lvl":1,"db":-15.79},{"w":"en","s":36.11,"e":36.74,"line":21,"lvl":1,"db":-18.36},{"w":"route","s":36.76,"e":36.89,"line":21,"lvl":1,"db":-15.32},{"w":"pour","s":36.91,"e":37.18,"line":21,"lvl":0,"db":-21.11},{"w":"le","s":37.2,"e":38.04,"line":21,"lvl":1,"db":-16.91},{"w":"stade","s":38.06,"e":38.29,"line":21,"lvl":1,"db":-14.65},{"w":"ASM","s":38.31,"e":39.22,"line":22,"lvl":1,"db":-17.26},{"w":"vin","s":39.6,"e":39.82,"line":23,"lvl":1,"db":-19.61},{"w":"chaud","s":39.84,"e":40.25,"line":23,"lvl":1,"db":-18.68},{"w":"ou","s":40.27,"e":40.48,"line":23,"lvl":1,"db":-17.79},{"w":"bien","s":40.5,"e":40.69,"line":23,"lvl":0,"db":-25},{"w":"truffade","s":40.71,"e":41.57,"line":23,"lvl":1,"db":-16.67},{"w":"ASM","s":41.59,"e":42.74,"line":24,"lvl":1,"db":-16.25},{"w":"tout","s":43.13,"e":43.32,"line":25,"lvl":1,"db":-17.53},{"w":"le","s":43.34,"e":43.75,"line":25,"lvl":1,"db":-16.86},{"w":"monde","s":43.77,"e":43.98,"line":25,"lvl":1,"db":-17.09},{"w":"est","s":44,"e":44.2,"line":25,"lvl":0,"db":-20.63},{"w":"bien","s":44.22,"e":44.64,"line":25,"lvl":1,"db":-15.58},{"w":"chaud","s":44.66,"e":44.93,"line":25,"lvl":1,"db":-15.71},{"w":"ASM","s":44.95,"e":45.74,"line":26,"lvl":1,"db":-15.47},{"w":"on","s":46.41,"e":46.61,"line":27,"lvl":1,"db":-16.15},{"w":"va","s":46.63,"e":47.05,"line":27,"lvl":1,"db":-17.07},{"w":"bri-ser","s":47.07,"e":47.48,"line":27,"lvl":1,"db":-18.06},{"w":"des","s":47.5,"e":47.83,"line":27,"lvl":1,"db":-16.99},{"w":"os","s":47.85,"e":47.99,"line":27,"lvl":0,"db":-22},{"w":"Jaunards","s":48.41,"e":48.96,"line":28,"lvl":1,"db":-15.57},{"w":"fêtards","s":49.29,"e":49.86,"line":29,"lvl":1,"db":-16.52},{"w":"allez","s":50.17,"e":51.03,"line":30,"lvl":1,"db":-16.59},{"w":"les","s":51.05,"e":51.48,"line":30,"lvl":1,"db":-16.53},{"w":"jaunes","s":51.5,"e":51.69,"line":30,"lvl":0,"db":-22.29},{"w":"et","s":51.71,"e":52.12,"line":30,"lvl":1,"db":-15.93},{"w":"bleus","s":52.14,"e":52.5,"line":30,"lvl":1,"db":-15.79},{"w":"jaunards","s":52.81,"e":53.44,"line":31,"lvl":1,"db":-16.73},{"w":"viandards","s":53.7,"e":54.33,"line":32,"lvl":1,"db":-18.38},{"w":"on","s":54.35,"e":54.56,"line":33,"lvl":1,"db":-15.07},{"w":"est","s":54.58,"e":54.77,"line":33,"lvl":1,"db":-19.11},{"w":"tous","s":54.79,"e":55.21,"line":33,"lvl":1,"db":-17.66},{"w":"avec","s":55.23,"e":55.64,"line":33,"lvl":1,"db":-16.75},{"w":"eux","s":55.66,"e":55.88,"line":33,"lvl":1,"db":-14.48},{"w":"jaunards","s":55.9,"e":56.53,"line":34,"lvl":1,"db":-18.15},{"w":"ricard","s":56.55,"e":57.19,"line":35,"lvl":1,"db":-16.09},{"w":"un","s":57.21,"e":57.42,"line":36,"lvl":1,"db":-17.16},{"w":"mélange","s":57.44,"e":58.08,"line":36,"lvl":1,"db":-16.42},{"w":"fabuleux","s":58.1,"e":58.95,"line":36,"lvl":1,"db":-17.39},{"w":"jaunards","s":58.97,"e":59.48,"line":37,"lvl":1,"db":-15.56},{"w":"bonnard","s":59.84,"e":60.4,"line":38,"lvl":1,"db":-16.27},{"w":"ce","s":60.94,"e":61.14,"line":39,"lvl":1,"db":-15.16},{"w":"soir","s":61.16,"e":61.35,"line":39,"lvl":1,"db":-16.65},{"w":"on","s":61.37,"e":61.57,"line":39,"lvl":1,"db":-16.33},{"w":"à","s":61.59,"e":61.79,"line":39,"lvl":1,"db":-16.43},{"w":"la","s":61.81,"e":61.91,"line":39,"lvl":2,"db":-13.3},{"w":"queue","s":61.93,"e":62.03,"line":39,"lvl":1,"db":-16.26},{"w":"!","s":62.05,"e":62.23,"line":39,"lvl":0,"db":-21.15}]};
+var SONG_URL = "chant-asm.mp3";
+
+function b64ToArrayBuffer(b64){
+  var bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+  for (var i=0;i<n;i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+
+var DEMO_LYRICS =
+  "ASM\n" +
+  "Tous en route pour le stade\n" +
+  "ASM\n" +
+  "vin chaud ou bien truffade\n" +
+  "ASM\n" +
+  "tout le monde est bien chaud\n" +
+  "ASM\n" +
+  "on va bri-ser des os\n" +
+  "Jaunards\n" +
+  "fêtards\n" +
+  "allez les jaunes et bleus\n" +
+  "jaunards\n" +
+  "viandards\n" +
+  "on est tous avec eux\n" +
+  "jaunards\n" +
+  "ricard\n" +
+  "un mélange fabuleux\n" +
+  "jaunards\n" +
+  "bonnard\n" +
+  "ce soir on à la queue ! \n" +
+  "ASM\n" +
+  "Tous en route pour le stade\n" +
+  "ASM\n" +
+  "vin chaud ou bien truffade\n" +
+  "ASM\n" +
+  "tout le monde est bien chaud\n" +
+  "ASM\n" +
+  "on va bri-ser des os\n" +
+  "Jaunards\n" +
+  "fêtards\n" +
+  "allez les jaunes et bleus\n" +
+  "jaunards\n" +
+  "viandards\n" +
+  "on est tous avec eux\n" +
+  "jaunards\n" +
+  "ricard\n" +
+  "un mélange fabuleux\n" +
+  "jaunards\n" +
+  "bonnard\n" +
+  "ce soir on à la queue !";
+
+function cleanLyrics(raw){
+  var removed = {head:0, credit:0, rep:0, blank:0};
+  var out = [];
+  var rows = String(raw).replace(/\r\n?/g,"\n").split("\n");
+  for (var i=0;i<rows.length;i++){
+    var t = rows[i];
+    // apostrophes courbes, espaces insécables
+    t = t.replace(/[‘’ʼ]/g,"'").replace(/[   ]/g," ");
+    t = t.replace(/\s+$/,"").replace(/^\s+/,"");
+    if (!t){ if (out.length && !out[out.length-1].pause) out.push({text:"", pause:true}); removed.blank++; continue; }
+    // crédits de fin de bloc
+    if (/^(paroliers?|auteurs?|compositeurs?|source|©|\(c\)|copyright|paroles de)\b/i.test(t)){ removed.credit++; continue; }
+    // en-têtes de section
+    if (/^[\[(].{0,40}[\])]$/.test(t)){ removed.head++; continue; }
+    // répétitions annoncées
+    var rep = t.match(/[\s(\[]*(?:x\s*(\d+)|bis)[\s)\]]*$/i);
+    var times = 1;
+    if (rep){
+      times = rep[1] ? Math.min(4, parseInt(rep[1],10)) : 2;
+      t = t.slice(0, rep.index).replace(/\s+$/,"");
+      removed.rep++;
+    }
+    if (!t) continue;
+    for (var k=0;k<times;k++) out.push({text:t, pause:false});
+  }
+  while (out.length && out[out.length-1].pause) out.pop();
+  return {lines:out, removed:removed};
+}
+
+function renderReport(r, n){
+  var bits = [];
+  if (r.head)   bits.push('<span class="rm">'+r.head+'</span> en-tête(s)');
+  if (r.credit) bits.push('<span class="rm">'+r.credit+'</span> crédit(s)');
+  if (r.rep)    bits.push('<span class="rm">'+r.rep+'</span> répétition(s) dépliée(s)');
+  $("report").innerHTML = n+" ligne(s) retenue(s)" + (bits.length ? " · retiré : "+bits.join(", ") : " · rien à nettoyer");
+}
+
+// =====================================================================
+// 2. Audio : décodage, enveloppes d'énergie
+// =====================================================================
+function audioCtx(){
+  if (!A.ctx) A.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  return A.ctx;
+}
+
+function buildEnvelope(buf){
+  var sr = buf.sampleRate, n = buf.length;
+  var ch = buf.getChannelData(0);
+  var ch2 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+  var frames = Math.max(1, Math.floor(buf.duration * FPS));
+  var per = n / frames;
+
+  // filtre passe-bas à un pôle pour séparer grave / aigu
+  var a = 1 - Math.exp(-2*Math.PI*150/sr);
+  var lp = 0;
+  var rms = new Float32Array(frames), bass = new Float32Array(frames), high = new Float32Array(frames);
+  var f = 0, acc=0, accB=0, accH=0, cnt=0, nextEdge = per;
+  for (var i=0;i<n;i++){
+    var x = ch2 ? (ch[i]+ch2[i])*0.5 : ch[i];
+    lp += a * (x - lp);
+    var h = x - lp;
+    acc += x*x; accB += lp*lp; accH += h*h; cnt++;
+    if (i+1 >= nextEdge && f < frames){
+      rms[f]  = Math.sqrt(acc/Math.max(1,cnt));
+      bass[f] = Math.sqrt(accB/Math.max(1,cnt));
+      high[f] = Math.sqrt(accH/Math.max(1,cnt));
+      f++; acc=accB=accH=0; cnt=0; nextEdge = (f+1)*per;
+    }
+  }
+  for (; f<frames; f++){ rms[f]=rms[f-1]||0; bass[f]=bass[f-1]||0; high[f]=high[f-1]||0; }
+
+  // version lissée : le fond respire au lieu de sauter
+  var slow = new Float32Array(frames), s = 0;
+  for (var j=0;j<frames;j++){ s += 0.06*(rms[j]-s); slow[j]=s; }
+
+  var peak = 1e-6, bpeak = 1e-6, speak = 1e-6;
+  for (var k=0;k<frames;k++){
+    if (rms[k]>peak) peak = rms[k];
+    if (bass[k]>bpeak) bpeak = bass[k];
+    if (slow[k]>speak) speak = slow[k];
+  }
+  return {fps:FPS, n:frames, rms:rms, bass:bass, high:high, slow:slow,
+          peak:peak, bassPeak:bpeak, slowPeak:speak, dur:buf.duration};
+}
+
+function envAt(arr, t){
+  if (!A.env) return 0;
+  var i = Math.max(0, Math.min(A.env.n-1, Math.round(t*A.env.fps)));
+  return arr[i];
+}
+
+function dbAt(t0, t1){
+  if (!A.env) return -30;
+  var i0 = Math.max(0, Math.round(t0*A.env.fps));
+  var i1 = Math.min(A.env.n-1, Math.max(i0, Math.round(t1*A.env.fps)));
+  var s = 0, c = 0;
+  for (var i=i0;i<=i1;i++){ s += A.env.rms[i]*A.env.rms[i]; c++; }
+  var v = Math.sqrt(s/Math.max(1,c));
+  return 20*Math.log10(Math.max(v, 1e-7));
+}
+
+// =====================================================================
+// 2bis. Moteur de calage
+//
+//   Le panneau After Effects transcrit réellement la voix (faster-whisper
+//   sur une piste isolée par Demucs) puis réaligne la transcription sur
+//   les paroles fournies. Impossible ici : le navigateur n'a pas le
+//   modèle. On fait donc le meilleur calage possible SANS reconnaissance
+//   de la parole — et c'est déjà un tout autre niveau que répartir au
+//   prorata du nombre de lettres :
+//     · mise en avant du centre stéréo (la voix y est presque toujours),
+//     · banc de filtres sur la bande vocale, enveloppe par bande,
+//     · flux positif entre bandes = attaques (≈ noyaux syllabiques),
+//     · détection des phrases chantées et des respirations,
+//     · comptage syllabique du texte français,
+//     · programmation dynamique : on découpe la suite d'attaques en
+//       lignes, en payant l'écart syllabique, les départs qui ne suivent
+//       pas une respiration, et les silences traversés au milieu d'une
+//       ligne.
+// =====================================================================
+var AR = 100;                       // trames d'analyse par seconde
+
+// Poids de l'alignement. Valeurs retenues après balayage sur des
+// morceaux de synthèse dont on connaît la vérité terrain.
+var TUNE = { logCost:1, wOns:0, skip:0.45, multi:0.30, merge:0.70,
+             skipAtBreak:0.45, breakPen:0.40, maxc:6, maxs:3, pinTol:0.8 };
+
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+// passe-bande biquad (Bristow-Johnson)
+function bpCoef(f0, Q, sr){
+  var w = 2*Math.PI*f0/sr, cw = Math.cos(w), sw = Math.sin(w), al = sw/(2*Q);
+  var a0 = 1+al;
+  return [al/a0, 0, -al/a0, (-2*cw)/a0, (1-al)/a0];
+}
+
+// filtre + enveloppe redressée, décimée à AR trames/s
+function bandEnvelope(x, sr, f0, Q, frames, hop){
+  var c = bpCoef(f0, Q, sr);
+  var x1=0,x2=0,y1=0,y2=0, env=0;
+  var aAtt = 1-Math.exp(-1/(sr*0.004)), aRel = 1-Math.exp(-1/(sr*0.045));
+  var out = new Float32Array(frames);
+  var f = 0, next = hop, n = x.length;
+  for (var i=0;i<n;i++){
+    var v = c[0]*x[i] + c[1]*x1 + c[2]*x2 - c[3]*y1 - c[4]*y2;
+    x2=x1; x1=x[i]; y2=y1; y1=v;
+    var r = v<0?-v:v;
+    env += (r>env ? aAtt : aRel) * (r-env);
+    if (i+1 >= next){ if (f<frames) out[f] = env; f++; next = (f+1)*hop; }
+  }
+  for (; f<frames; f++) out[f] = env;
+  return out;
+}
+
+// mono milieu / côtés, décimé vers ~16 kHz
+function prepare(buf){
+  var sr0 = buf.sampleRate;
+  var L = buf.getChannelData(0);
+  var R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
+  var dec = Math.max(1, Math.round(sr0/16000));
+  var n = Math.floor(buf.length/dec);
+  var mid = new Float32Array(n), side = new Float32Array(n);
+  var i = 0;
+  for (var k=0;k<n;k++){
+    var sm=0, ss=0;
+    for (var j=0;j<dec && i<L.length;j++,i++){ sm += (L[i]+R[i])*0.5; ss += (L[i]-R[i])*0.5; }
+    mid[k] = sm/dec; side[k] = ss/dec;
+  }
+  return {mid:mid, side:side, sr:sr0/dec, n:n};
+}
+
+function boxSmooth(a, half){
+  var n = a.length, out = new Float32Array(n), s = 0, i;
+  var pre = new Float64Array(n+1);
+  for (i=0;i<n;i++) pre[i+1] = pre[i] + a[i];
+  for (i=0;i<n;i++){
+    var lo = Math.max(0,i-half), hi = Math.min(n-1,i+half);
+    out[i] = (pre[hi+1]-pre[lo])/(hi-lo+1);
+  }
+  return out;
+}
+function quantile(sortedArr, q){
+  var idx = q*(sortedArr.length-1);
+  var lo = Math.floor(idx), hi = Math.ceil(idx);
+  return lo===hi ? sortedArr[lo] : sortedArr[lo]+(sortedArr[hi]-sortedArr[lo])*(idx-lo);
+}
+function normalise(a){
+  var s = Array.prototype.slice.call(a).sort(function(x,y){return x-y;});
+  var top = quantile(s, 0.98) || 1e-9;
+  var out = new Float32Array(a.length);
+  for (var i=0;i<a.length;i++) out[i] = clamp(a[i]/top, 0, 1.6);
+  return out;
+}
+
+function analyse(buf){
+  var p = prepare(buf);
+  var frames = Math.max(8, Math.floor(buf.duration*AR));
+  var hop = p.n/frames;
+  var F0 = [250, 375, 560, 840, 1250, 1900, 2800, 4200];
+  var bands = [], b, f, i;
+  for (b=0;b<F0.length;b++) bands.push(bandEnvelope(p.mid, p.sr, F0[b], 2.2, frames, hop));
+  var midW  = bandEnvelope(p.mid,  p.sr, 1200, 0.7, frames, hop);
+  var sideW = bandEnvelope(p.side, p.sr, 1200, 0.7, frames, hop);
+
+  // poids « centre » : ce qui est large en stéréo est rarement la voix
+  var wc = new Float32Array(frames);
+  for (f=0;f<frames;f++){
+    var c = midW[f] / (midW[f] + sideW[f] + 1e-9);
+    wc[f] = clamp((c-0.42)/0.28, 0.25, 1);
+  }
+
+  // compression log par bande, puis énergie et flux positif
+  var lb = [];
+  for (b=0;b<bands.length;b++){
+    var a = new Float32Array(frames);
+    for (f=0;f<frames;f++) a[f] = Math.log(1 + 120*bands[b][f]);
+    lb.push(a);
+  }
+  var voc = new Float32Array(frames), flux = new Float32Array(frames);
+  for (f=0;f<frames;f++){
+    var sV=0, sF=0;
+    for (b=0;b<lb.length;b++){
+      sV += lb[b][f];
+      var d = f>0 ? lb[b][f]-lb[b][f-1] : 0;
+      if (d>0) sF += d;
+    }
+    voc[f] = sV*wc[f];
+    flux[f] = sF*wc[f];
+  }
+  voc = normalise(voc); flux = normalise(flux);
+
+  // ---- phrases chantées, séparées par les respirations ----
+  var sm = boxSmooth(voc, Math.round(0.075*AR));
+  var srt = Array.prototype.slice.call(sm).sort(function(x,y){return x-y;});
+  var flo = quantile(srt,0.15), top = quantile(srt,0.95);
+  var onT = flo + 0.30*(top-flo), offT = flo + 0.20*(top-flo);
+  var segs = [], cur = -1;
+  for (f=0;f<frames;f++){
+    if (cur < 0){ if (sm[f] > onT) cur = f; }
+    else if (sm[f] < offT){ segs.push({a:cur, b:f}); cur = -1; }
+  }
+  if (cur >= 0) segs.push({a:cur, b:frames-1});
+  var closeGap = Math.round(0.22*AR), minLen = Math.round(0.18*AR);
+  var merged = [];
+  for (i=0;i<segs.length;i++){
+    if (merged.length && segs[i].a - merged[merged.length-1].b < closeGap) merged[merged.length-1].b = segs[i].b;
+    else merged.push({a:segs[i].a, b:segs[i].b});
+  }
+  segs = [];
+  for (i=0;i<merged.length;i++) if (merged[i].b-merged[i].a >= minLen)
+    segs.push({s:merged[i].a/AR, e:merged[i].b/AR});
+
+  // ---- attaques : maxima locaux au-dessus d'un seuil adaptatif ----
+  var base = boxSmooth(flux, Math.round(0.30*AR));
+  var minGap = Math.round(0.11*AR);
+  var cand = [];
+  for (f=1;f<frames-1;f++){
+    if (flux[f] < base[f]*1.30 + 0.045) continue;
+    if (flux[f] < flux[f-1] || flux[f] < flux[f+1]) continue;
+    cand.push(f);
+  }
+  var keep = [];
+  for (i=0;i<cand.length;i++){
+    if (keep.length && cand[i]-keep[keep.length-1] < minGap){
+      if (flux[cand[i]] > flux[keep[keep.length-1]]) keep[keep.length-1] = cand[i];
+    } else keep.push(cand[i]);
+  }
+  // on ne garde que les attaques tombant dans une phrase chantée
+  var ons = [];
+  for (i=0;i<keep.length;i++){
+    var t = keep[i]/AR;
+    for (var k=0;k<segs.length;k++){
+      if (t >= segs[k].s-0.05 && t <= segs[k].e+0.05){ ons.push(t); break; }
+    }
+  }
+  return {rate:AR, n:frames, voc:voc, flux:flux, segs:segs, onsets:ons, dur:buf.duration};
+}
+
+// ---------------------------------------------------------------------
+// Syllabes (français) — approximation suffisante : seules les
+// proportions entre mots comptent, pas la valeur absolue.
+// ---------------------------------------------------------------------
+var VOW = "aeiouyàâäéèêëîïôöùûüÿœæ";
+var reVow = new RegExp("["+VOW+"]+","g");
+function syllables(word){
+  var w = String(word).toLowerCase()
+    .replace(/[’']/g," ")
+    .replace(new RegExp("[^"+VOW+"a-zçñ\\s-]","g"),"");
+  var parts = w.split(/[\s-]+/), total = 0;
+  for (var p=0;p<parts.length;p++){
+    var s = parts[p]; if (!s) continue;
+    var groups = s.match(reVow);
+    var c = groups ? groups.length : 0;
+    if (!c){ total += 1; continue; }
+    if (c > 1){
+      if (new RegExp("[^"+VOW+"]e$").test(s)) c--;
+      else if (new RegExp("[^"+VOW+"]es$").test(s)) c--;
+      else if (new RegExp("[^"+VOW+"]ent$").test(s) && !/ment$/.test(s)) c--;
+    }
+    total += Math.max(1,c);
+  }
+  return Math.max(1,total);
+}
+function tokens(text){
+  return String(text).split(/\s+/).filter(function(x){ return x.length; });
+}
+
+// ---------------------------------------------------------------------
+// Alignement
+//
+//   Deux niveaux, du plus fiable au moins fiable.
+//   1. Les PHRASES CHANTÉES (voix qui démarre, voix qui s'arrête) sont
+//      le repère solide : sur un morceau normal il y en a autant que de
+//      lignes de paroles. On associe donc d'abord les lignes aux phrases
+//      par programmation dynamique, en autorisant une phrase
+//      instrumentale, plusieurs lignes dans une phrase, ou une ligne
+//      coupée en deux par une reprise de souffle.
+//   2. Les ATTAQUES ne servent qu'à découper l'intérieur d'une phrase et
+//      à poser les mots — elles sont bruitées (la batterie en fabrique),
+//      donc on ne leur confie jamais la structure.
+// ---------------------------------------------------------------------
+function alignLines(){
+  var an = A.an;
+  if (!an || !A.lines.length || !an.segs.length) return false;
+
+  // Les lignes vides du collage sont une indication donnée par
+  // l'utilisateur : à cet endroit, le chant s'arrête. On s'en sert.
+  var sung = [], syl = [], brk = [], pin = [], i, j, k, pending = 0;
+  for (i=0;i<A.lines.length;i++){
+    if (A.lines[i].pause){ pending++; continue; }
+    sung.push(i);
+    brk.push(pending); pending = 0;
+    pin.push(A.lines[i].pin ? A.lines[i].start : -1);
+    var tk = tokens(A.lines[i].text), s = 0;
+    for (j=0;j<tk.length;j++) s += syllables(tk[j]);
+    syl.push(Math.max(1,s));
+  }
+  var Lc = sung.length, M = an.segs.length;
+  if (!Lc) return false;
+
+  var voiced = 0, totalSyl = 0;
+  var segDur = new Float64Array(M), segOns = new Float64Array(M);
+  for (i=0;i<M;i++){
+    segDur[i] = an.segs[i].e - an.segs[i].s;
+    voiced += segDur[i];
+    var cnt = 0;
+    for (j=0;j<an.onsets.length;j++){
+      if (an.onsets[j] < an.segs[i].s-0.03) continue;
+      if (an.onsets[j] > an.segs[i].e+0.03) break;
+      cnt++;
+    }
+    segOns[i] = cnt;
+  }
+  for (i=0;i<Lc;i++) totalSyl += syl[i];
+
+  var BIG = 1e9, MAXC = TUNE.maxc, MAXS = TUNE.maxs;
+
+  // Deux observations indépendantes du nombre de syllabes d'une phrase :
+  // sa DURÉE (fiable) et son NOMBRE D'ATTAQUES (informatif mais bruité
+  // par la batterie). Le coût est un rapport, pas un écart en secondes :
+  // une erreur de débit global ne se transforme pas en dérive cumulée.
+  function mkCost(rate){
+    var onsRate = 0, dd = 0;
+    for (var z=0;z<M;z++){ onsRate += segOns[z]; dd += segDur[z]; }
+    onsRate = onsRate / Math.max(0.5, dd);
+    return function(li, c, sj, ss){
+      var sy = 0, x;
+      for (x=0;x<c;x++) sy += syl[li+x];
+      var d = 0, no = 0;
+      for (x=0;x<ss;x++){ d += segDur[sj+x]; no += segOns[sj+x]; }
+      var exp = Math.max(0.20, sy/rate);
+      var cD = TUNE.logCost ? Math.abs(Math.log(Math.max(0.15,d)/exp))
+                            : Math.abs(d-exp)/Math.max(0.6, exp);
+      if (TUNE.wOns <= 0) return cD;
+      var expO = Math.max(1, sy*onsRate/rate);
+      var cO = TUNE.logCost ? Math.abs(Math.log(Math.max(1,no)/expO))
+                            : Math.abs(no-expO)/Math.max(2, expO);
+      return cD + TUNE.wOns*cO;
+    };
+  }
+
+  // Résout une tranche : les lignes [la,lb) doivent occuper exactement
+  // les phrases [sa,sb). `anchored` interdit de commencer par une phrase
+  // instrumentale — la première ligne de la tranche est un point fixe.
+  function solveRange(rate, la, lb, sa, sb, anchored){
+    var cost = mkCost(rate);
+    var nl = lb-la, ns = sb-sa;
+    var f = new Float64Array((nl+1)*(ns+1));
+    var frm = new Int32Array((nl+1)*(ns+1));
+    for (var z=0;z<f.length;z++) f[z] = BIG;
+    var ix = function(a,b){ return a*(ns+1)+b; };
+    f[ix(0,0)] = 0;
+    for (var a=0;a<=nl;a++){
+      for (var b=0;b<=ns;b++){
+        var cur = f[ix(a,b)];
+        if (cur >= BIG) continue;
+        var atStart = (a===0 && b===0);
+        if (b < ns && !(anchored && atStart)){        // phrase instrumentale
+          var atBreak = (a < nl && brk[la+a] > 0);
+          var v = cur + (atBreak ? TUNE.skipAtBreak : TUNE.skip);
+          if (v < f[ix(a,b+1)]){ f[ix(a,b+1)] = v; frm[ix(a,b+1)] = 0; }
+        }
+        if (b < ns && a < nl){                        // c lignes dans la phrase
+          for (var c=1;c<=Math.min(MAXC, nl-a);c++){
+            var inner = 0;
+            for (var y=1;y<c;y++) if (brk[la+a+y] > 0) inner++;
+            var v2 = cur + cost(la+a, c, sa+b, 1) + TUNE.multi*(c-1) + TUNE.breakPen*inner;
+            if (v2 < f[ix(a+c,b+1)]){ f[ix(a+c,b+1)] = v2; frm[ix(a+c,b+1)] = 1000 + c; }
+          }
+        }
+        if (a < nl){                                  // ligne coupée par un souffle
+          for (var ss=2; ss<=Math.min(MAXS, ns-b); ss++){
+            var v3 = cur + cost(la+a, 1, sa+b, ss) + TUNE.merge*(ss-1);
+            if (v3 < f[ix(a+1,b+ss)]){ f[ix(a+1,b+ss)] = v3; frm[ix(a+1,b+ss)] = 2000 + ss; }
+          }
+        }
+      }
+    }
+    if (f[ix(nl,ns)] >= BIG) return null;
+    var span = new Array(nl), used = 0, ci = nl, cj = ns, kk;
+    while (ci > 0 || cj > 0){
+      var code = frm[ix(ci,cj)], typ = Math.floor(code/1000), n = code%1000;
+      if (typ === 0){ cj -= 1; }
+      else if (typ === 1){
+        for (kk=0;kk<n;kk++) span[ci-1-kk] = {seg:sa+cj-1, part:n-1-kk, of:n};
+        used += segDur[sa+cj-1];
+        ci -= n; cj -= 1;
+      } else {
+        span[ci-1] = {seg:sa+cj-n, part:0, of:1, merge:n};
+        for (kk=1;kk<=n;kk++) used += segDur[sa+cj-kk];
+        ci -= 1; cj -= n;
+      }
+      if (ci < 0 || cj < 0) return null;
+    }
+    return {span:span, used:used, cost:f[ix(nl,ns)]};
+  }
+
+  function solveAll(rate, cuts){
+    var span = new Array(Lc), used = 0;
+    for (var r=0;r+1<cuts.length;r++){
+      var seg = solveRange(rate, cuts[r].l, cuts[r+1].l, cuts[r].s, cuts[r+1].s, r > 0);
+      if (!seg) return null;
+      for (var x=0;x<seg.span.length;x++) span[cuts[r].l + x] = seg.span[x];
+      used += seg.used;
+    }
+    return {span:span, used:used};
+  }
+
+  // 1) débit syllabique : une passe libre suffit à l'estimer, puis on
+  //    recommence en ne comptant que les phrases porteuses de texte
+  var free = [{l:0,s:0},{l:Lc,s:M}];
+  var rate = clamp(totalSyl / Math.max(0.5, voiced), 1.6, 9);
+  var base = solveAll(rate, free);
+  if (!base) return false;
+  for (var pass=0; pass<2; pass++){
+    var r2 = clamp(totalSyl / Math.max(0.5, base.used), 1.6, 9);
+    if (Math.abs(r2-rate)/rate < 0.02) break;
+    var b2 = solveAll(r2, free);
+    if (!b2) break;
+    rate = r2; base = b2;
+  }
+
+  // 2) points fixes : chaque ligne recalée à la main coupe le problème
+  //    en deux. Une correction ne peut donc plus déplacer ce qui est
+  //    déjà validé, et tout ce qui suit se réaligne derrière elle.
+  var sol = base;
+  var cuts = [{l:0,s:0}], lastL = 0, lastS = 0, okPins = true;
+  for (k=0;k<Lc;k++){
+    if (pin[k] < 0) continue;
+    var bj = -1, bd = 1e9;
+    for (j=0;j<M;j++){
+      var dd2 = Math.abs(an.segs[j].s - pin[k]);
+      if (dd2 < bd){ bd = dd2; bj = j; }
+    }
+    if (bj < 0 || k < lastL || bj < lastS){ okPins = false; break; }
+    if (k === lastL && bj === lastS) continue;
+    if (Lc - k > M - bj){ okPins = false; break; }
+    cuts.push({l:k, s:bj}); lastL = k; lastS = bj;
+  }
+  if (okPins && cuts.length > 1){
+    cuts.push({l:Lc, s:M});
+    var pinned = solveAll(rate, cuts);
+    if (pinned) sol = pinned;
+  }
+  var span = sol.span;
+
+  // Confiance : à quel point la phrase attribuée dure ce que le texte
+  // laisse attendre. C'est la seule chose que le moteur sache vraiment
+  // juger, et c'est ce qui prévient l'utilisateur des lignes à revoir.
+  function confOf(li, c, sj, ss, extra){
+    var sy = 0, x;
+    for (x=0;x<c;x++) sy += syl[li+x];
+    var d = 0;
+    for (x=0;x<ss;x++) d += segDur[sj+x];
+    var exp = Math.max(0.20, sy/rate);
+    return clamp(Math.exp(-1.9*Math.abs(Math.log(Math.max(0.15,d)/exp))) * extra, 0.05, 1);
+  }
+
+  // pose des débuts de ligne
+  for (k=0;k<Lc;k++){
+    var sp = span[k];
+    if (!sp) return false;
+    var sg = an.segs[sp.seg];
+    var L = A.lines[sung[k]];
+    if (sp.of === 1){
+      L.start = sg.s;
+      L.segEnd = sp.merge ? an.segs[sp.seg + sp.merge - 1].e : sg.e;
+      L.conf = confOf(k, 1, sp.seg, sp.merge||1, sp.merge ? 0.70 : 1);
+      L.why = sp.merge ? "phrase coupée par une respiration" : "seule dans sa phrase chantée";
+    } else {
+      // plusieurs lignes dans la même phrase : découpe au prorata des
+      // syllabes, puis on cale la coupe sur une attaque suivant un blanc
+      var group = [], gs = 0, q;
+      for (q=k-sp.part; q<k-sp.part+sp.of; q++){ group.push(syl[q]); gs += syl[q]; }
+      var cum = 0;
+      for (q=0;q<sp.part;q++) cum += group[q];
+      var tol = Math.max(0.18, (sg.e-sg.s)/gs*1.1);
+      L.start = (sp.part === 0) ? sg.s
+              : snapToOnset(sg.s + (sg.e-sg.s)*(cum/gs), sg, tol);
+      var cumEnd = cum + group[sp.part];
+      L.segEnd = (sp.part === sp.of-1) ? sg.e
+               : snapToOnset(sg.s + (sg.e-sg.s)*(cumEnd/gs), sg, tol);
+      L.conf = confOf(k-sp.part, sp.of, sp.seg, 1, sp.part === 0 ? 0.85 : 0.70);
+      L.why = "partagée avec " + (sp.of-1) + " autre" + (sp.of>2?"s":"") + " ligne" + (sp.of>2?"s":"") + " dans la même phrase";
+    }
+  }
+  // un point fixe garde exactement l'instant choisi par l'utilisateur
+  for (k=0;k<Lc;k++) if (pin[k] >= 0){
+    A.lines[sung[k]].start = pin[k];
+    A.lines[sung[k]].conf = 1;
+  }
+  // ordre strictement croissant, quoi qu'il arrive
+  for (k=1;k<Lc;k++){
+    var pv = A.lines[sung[k-1]], cu = A.lines[sung[k]];
+    if (cu.start <= pv.start + 0.12) cu.start = pv.start + 0.12;
+  }
+
+  rebuildWords();
+  placePauses();
+  return true;
+}
+// attaque la plus proche d'un instant visé, avec une préférence pour
+// celles qui suivent un blanc — une reprise après un souffle
+function snapToOnset(target, seg, tol){
+  if (!A.an) return target;
+  var o = A.an.onsets, best = target, bd = 1e9;
+  for (var i=0;i<o.length;i++){
+    if (o[i] < seg.s-0.02) continue;
+    if (o[i] > seg.e+0.02) break;
+    var d = Math.abs(o[i]-target);
+    if (d > tol) continue;
+    var prevGap = i>0 ? o[i]-o[i-1] : 9;
+    var score = d - Math.min(0.22, prevGap*0.30);
+    if (score < bd){ bd = score; best = o[i]; }
+  }
+  return best;
+}
+
+// les lignes vides retombent au milieu des respirations
+function placePauses(){
+  for (var i=0;i<A.lines.length;i++){
+    if (!A.lines[i].pause) continue;
+    var prevEnd = 0, nextStart = A.dur, j;
+    for (j=i-1;j>=0;j--) if (!A.lines[j].pause){
+      var ws = A.lines[j].words;
+      prevEnd = ws && ws.length ? ws[ws.length-1].e : A.lines[j].start;
+      break;
+    }
+    for (j=i+1;j<A.lines.length;j++) if (!A.lines[j].pause){ nextStart = A.lines[j].start; break; }
+    A.lines[i].start = prevEnd + (nextStart-prevEnd)*0.5;
+  }
+}
+
+// =====================================================================
+// 3. Placement initial + mots
+// =====================================================================
+function autoPlace(){
+  if (!A.lines.length) return;
+  if (A.an && alignLines()) return;          // moteur de calage
+  spreadEvenly();                            // repli : répartition simple
+}
+
+function spreadEvenly(){
+  if (!A.env) return;
+  var thr = A.env.peak*0.06, first=0, last=A.env.n-1, i;
+  for (i=0;i<A.env.n;i++){ if (A.env.rms[i]>thr){ first=i; break; } }
+  for (i=A.env.n-1;i>=0;i--){ if (A.env.rms[i]>thr){ last=i; break; } }
+  var t0 = first/A.env.fps, t1 = Math.max(t0+1, last/A.env.fps);
+  var weights = [], total = 0;
+  for (i=0;i<A.lines.length;i++){
+    var w = A.lines[i].pause ? 0.6 : Math.max(1, A.lines[i].text.length/9);
+    weights.push(w); total += w;
+  }
+  var cur = t0;
+  for (i=0;i<A.lines.length;i++){
+    A.lines[i].start = cur; A.lines[i].conf = undefined;
+    A.lines[i].oa = A.lines[i].oz = undefined;
+    cur += (t1-t0) * (weights[i]/total);
+  }
+  rebuildWords();
+}
+
+// Les mots se posent sur les attaques réelles quand on en a ; sinon on
+// retombe sur la répartition proportionnelle. Vaut aussi après un
+// recalage manuel : la ligne bouge, les mots se re-collent au son.
+function rebuildWords(){
+  var i, j;
+  for (i=0;i<A.lines.length;i++){
+    var L = A.lines[i];
+    L.words = [];
+    if (L.pause) continue;
+
+    var next = A.dur;
+    for (j=i+1;j<A.lines.length;j++){
+      if (A.lines[j].pause) continue;
+      if (A.lines[j].start > L.start + 1e-6){ next = A.lines[j].start; break; }
+    }
+
+    var tk = tokens(L.text);
+    if (!tk.length) continue;
+    var syl = [], totalSyl = 0;
+    for (j=0;j<tk.length;j++){ var s = syllables(tk[j]); syl.push(s); totalSyl += s; }
+
+    // les mots restent dans leur phrase chantée : pas de débordement
+    var cap = Math.min(next - 0.02, L.start + 14);
+    if (L.segEnd !== undefined) cap = Math.min(cap, L.segEnd + 0.05);
+    var ons = A.an ? onsetsBetween(L.start - 0.04, cap) : null;
+    if (ons && ons.length >= Math.min(tk.length, 2)){
+      var cum = 0, prev = -1;
+      for (j=0;j<tk.length;j++){
+        var idx = clamp(Math.round((cum/totalSyl) * ons.length), 0, ons.length-1);
+        if (idx <= prev) idx = prev+1;
+        var st = (idx <= ons.length-1) ? ons[idx]
+                                       : ons[ons.length-1] + (idx-(ons.length-1))*0.12;
+        prev = idx;
+        L.words.push({w:tk[j], s:st, e:0});
+        cum += syl[j];
+      }
+      var lastEnd = Math.min(cap, L.words[L.words.length-1].s + lastWordSpan(L.words[L.words.length-1].s, cap));
+      for (j=0;j<L.words.length;j++){
+        var endT = (j+1 < L.words.length) ? L.words[j+1].s - 0.02 : lastEnd;
+        L.words[j].e = Math.max(L.words[j].s + 0.09, endT);
+      }
+      L.start = L.words[0].s;
+      continue;
+    }
+
+    // repli proportionnel aux syllabes (mieux que le nombre de lettres)
+    var span = Math.max(0.4, Math.min(next - L.start, 12));
+    var cursor = L.start;
+    for (j=0;j<tk.length;j++){
+      var d = span * (syl[j]/totalSyl);
+      L.words.push({w:tk[j], s:cursor, e:cursor+d*0.92});
+      cursor += d;
+    }
+  }
+  classify();
+}
+
+function onsetsBetween(t0, t1){
+  if (!A.an) return null;
+  var o = A.an.onsets, out = [];
+  for (var i=0;i<o.length;i++){
+    if (o[i] >= t0 && o[i] <= t1) out.push(o[i]);
+    else if (o[i] > t1) break;
+  }
+  return out;
+}
+
+// le dernier mot tient jusqu'à la fin de la phrase chantée
+function lastWordSpan(s, cap){
+  var seg = null;
+  if (A.an) for (var i=0;i<A.an.segs.length;i++){
+    if (s >= A.an.segs[i].s-0.1 && s <= A.an.segs[i].e+0.1){ seg = A.an.segs[i]; break; }
+  }
+  var e = seg ? seg.e : s+0.6;
+  return clamp(e - s, 0.22, Math.max(0.22, cap - s));
+}
+
+// trois niveaux d'intensité, même règle que le plugin
+function classify(){
+  var all = [], i, j;
+  for (i=0;i<A.lines.length;i++)
+    for (j=0;j<A.lines[i].words.length;j++){
+      var w = A.lines[i].words[j];
+      w.db = dbAt(w.s, w.e);
+      all.push(w.db);
+    }
+  if (all.length < 4){
+    for (i=0;i<A.lines.length;i++)
+      for (j=0;j<A.lines[i].words.length;j++) A.lines[i].words[j].lvlUse = 1;
+    setStat(0, all.length, 0); return;
+  }
+  var sorted = all.slice().sort(function(a,b){return a-b;});
+  function pct(q){
+    var idx = (q/100)*(sorted.length-1);
+    var lo = Math.floor(idx), hi = Math.ceil(idx);
+    return lo===hi ? sorted[lo] : sorted[lo]+(sorted[hi]-sorted[lo])*(idx-lo);
+  }
+  var loT = pct(40), hiT = pct(88), med = pct(50), c=[0,0,0];
+  for (i=0;i<A.lines.length;i++)
+    for (j=0;j<A.lines[i].words.length;j++){
+      var v = A.lines[i].words[j];
+      if (v.db >= hiT && v.db >= med+3) v.lvl = 2;
+      else if (v.db <= loT && v.db <= med-3) v.lvl = 0;
+      else v.lvl = 1;
+      c[v.lvl]++;
+    }
+  var shown = applyScope(loT, hiT, med);
+  setStat(shown[0], shown[1], shown[2]);
+}
+
+// PORTÉE DE LA DYNAMIQUE — identique au panneau After Effects.
+//
+// Classer chaque mot séparément donne une ligne en dents de scie : deux
+// mots voisins tombant de part et d'autre d'un seuil s'affichent à des
+// corps différents, ce qui se lit comme un défaut de composition. On
+// rapporte donc le niveau à la LIGNE : la phrase entière grossit quand
+// elle est chantée fort, mais tous ses mots partagent le même corps.
+// Le niveau d'une ligne est sa MÉDIANE en dB, pour qu'un mot isolé plus
+// appuyé ne tire pas toute la phrase vers le haut.
+function applyScope(loT, hiT, med){
+  var shown = [0,0,0];
+  for (var i=0;i<A.lines.length;i++){
+    var L = A.lines[i], j;
+    if (!L.words || !L.words.length) continue;
+    if (!S.dyn || S.dynScope === 0){
+      for (j=0;j<L.words.length;j++){
+        L.words[j].lvlUse = L.words[j].lvl;
+        shown[L.words[j].lvl]++;
+      }
+      continue;
+    }
+    var vals = [];
+    for (j=0;j<L.words.length;j++) vals.push(L.words[j].db);
+    vals.sort(function(a,b){ return a-b; });
+    var m = (vals.length % 2) ? vals[(vals.length-1)/2]
+                              : (vals[vals.length/2-1] + vals[vals.length/2]) / 2;
+    var lvl = (m >= hiT && m >= med+3) ? 2 : ((m <= loT && m <= med-3) ? 0 : 1);
+    L.lvl = lvl;
+    for (j=0;j<L.words.length;j++){
+      L.words[j].lvlUse = (S.dynScope === 2 && L.words[j].lvl === 2) ? 2 : lvl;
+      shown[L.words[j].lvlUse]++;
+    }
+  }
+  return shown;
+}
+function setStat(a,b,c){
+  $("lvlstat").innerHTML = "intensité : <b>"+a+"</b> doux · <b>"+b+"</b> normal · <b>"+c+"</b> crié";
+}
+
+// =====================================================================
+// 4. Rendu de l'image
+// =====================================================================
+var cv = $("stage"), g = cv.getContext("2d");
+
+function hex2rgb(h){
+  h = String(h).replace("#","");
+  if (h.length===3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return [parseInt(h.substr(0,2),16), parseInt(h.substr(2,2),16), parseInt(h.substr(4,2),16)];
+}
+function mix(c, k){ return "rgb("+Math.round(c[0]*k)+","+Math.round(c[1]*k)+","+Math.round(c[2]*k)+")"; }
+
+function drawBackground(g, W, H, t){
+  var base = hex2rgb(S.base);
+  var react = S.react/100;
+  var e = A.env ? envAt(A.env.slow,t)/A.env.slowPeak : 0;
+  var b = A.env ? envAt(A.env.bass,t)/A.env.bassPeak : 0;
+  var lum = 1 + react*(e*1.5);            // la lumière respire
+  var pulse = 1 + react*(b*0.35);         // l'échelle bat sur les graves
+
+  var gr = g.createRadialGradient(W*0.5, H*0.58, 0, W*0.5, H*0.5, W*0.78/pulse);
+  gr.addColorStop(0, mix(base, 0.55+0.85*lum*0.5));
+  gr.addColorStop(0.55, mix(base, 0.32+0.4*lum*0.5));
+  gr.addColorStop(1, mix(base, 0.13));
+  g.fillStyle = gr; g.fillRect(0,0,W,H);
+
+  // anneaux : densité et rayon suivent l'énergie, pas la couleur
+  var rings = 5;
+  for (var i=0;i<rings;i++){
+    var p = (i+1)/rings;
+    var r = (W*0.20 + p*W*0.36) * pulse;
+    g.beginPath();
+    g.arc(W*0.5, H*0.55, r, 0, Math.PI*2);
+    g.strokeStyle = "rgba(255,255,255," + (0.030*react*(1-p*0.6) + 0.055*react*e*(1-p)) + ")";
+    g.lineWidth = 1 + 2.5*react*b;
+    g.stroke();
+  }
+  // léger grain sur les pics, sans couleur
+  var grain = react*e*0.05;
+  if (grain > 0.004){
+    g.fillStyle = "rgba(255,255,255,"+grain+")";
+    for (var k=0;k<60;k++){
+      g.fillRect((Math.random()*W)|0, (Math.random()*H)|0, 2, 2);
+    }
+  }
+}
+
+function activeLineAt(t){
+  var best = -1;
+  for (var i=0;i<A.lines.length;i++){
+    if (A.lines[i].pause) continue;
+    if (A.lines[i].start <= t + 0.35) best = i;
+  }
+  if (best < 0) return null;
+  var L = A.lines[best];
+  if (!L.words.length) return null;
+  var end = L.words[L.words.length-1].e + 0.9;
+  if (t > end) return null;
+  return L;
+}
+
+function drawLine(g, W, H, t){
+  var L = activeLineAt(t);
+  if (!L) return;
+  var tIn = L.start - 0.28;
+  var age = t - tIn;
+  var pop = Math.min(1, Math.max(0, age/0.4));
+  var ease = 1 - Math.pow(1-pop, 3);
+  var end = L.words[L.words.length-1].e + 0.9;
+  var out = Math.min(1, Math.max(0, (end - t)/0.35));
+  var alpha = Math.min(ease, out);
+  if (alpha <= 0.001) return;
+
+  var baseSize = S.size * (W/1280) * 12 / 10;
+  var sizes = [0.78, 1, 1.38];
+
+  g.save();
+  g.globalAlpha = alpha;
+  g.translate(0, (1-ease)*26);
+  g.textBaseline = "alphabetic";
+  g.textAlign = "left";
+
+  // Mesure. Le mot actif grossit d'un facteur POP : on lui réserve cette
+  // place à TOUS les mots, sinon il mord sur ses voisins en grossissant,
+  // et réserver seulement au mot actif ferait sauter la ligne entière.
+  var POP = 1.16;
+  var i, parts = [], total = 0, maxSize = 0;
+  var space = baseSize*0.20;
+  for (i=0;i<L.words.length;i++){
+    var w = L.words[i];
+    // le corps suit la PORTÉE choisie ; le niveau propre du mot ne sert
+    // plus qu'à décider s'il vibre
+    var lv = (w.lvlUse === undefined) ? ((w.lvl === undefined) ? 1 : w.lvl) : w.lvlUse;
+    var sz = baseSize * (S.dyn ? sizes[lv] : 1);
+    g.font = "400 "+sz+"px Anton, Impact, sans-serif";
+    var wd = g.measureText(w.w.toUpperCase()).width * POP;
+    parts.push({w:w, sz:sz, wd:wd});
+    total += wd; if (sz>maxSize) maxSize = sz;
+  }
+  total += space*(parts.length-1);
+  var fit = Math.min(1, (W*0.88)/Math.max(1,total));
+  var baseline = H * (S.posY/100);
+  var x = W/2 - (total*fit)/2;
+  var accent = S.accent;
+
+  var ballX = null;
+  for (i=0;i<parts.length;i++){
+    var p = parts[i], ww = p.w;
+    var sz = p.sz*fit, wd = p.wd*fit;
+    var until = (i+1 < parts.length) ? parts[i+1].w.s : ww.e;
+    var state = t < ww.s ? 0 : (t < until ? 1 : 2);
+    var k = state===1 ? POP : 1;
+    // ressort à l'attaque
+    if (state===1){
+      var a2 = (t-ww.s)/0.18;
+      if (a2 < 1) k = 1 + (POP-1)*(1-Math.pow(1-a2,2)) + 0.05*Math.sin(a2*Math.PI);
+    }
+    // vibration du mot réellement crié — déterministe, donc l'export
+    // vidéo reproduit exactement ce que montre l'aperçu
+    var vx = 0, vy = 0;
+    if (S.dyn && S.shake && ww.lvl === 2 && state === 1){
+      var amp = 3 * (W/1280) * fit;
+      vx = amp * (Math.sin(t*2*Math.PI*12 + i*1.7) + 0.6*Math.sin(t*2*Math.PI*19 + i));
+      vy = amp * (Math.sin(t*2*Math.PI*15 + i*2.3) + 0.6*Math.sin(t*2*Math.PI*23 + i*0.7));
+    }
+    g.save();
+    g.translate(x + wd/2 + vx, baseline + vy);
+    g.scale(k*fit, k*fit);
+    g.font = "400 "+p.sz+"px Anton, Impact, sans-serif";
+    g.textAlign = "center";
+    if (state===0){ g.fillStyle = "rgba(255,255,255,0.42)"; }
+    else if (state===1){
+      g.fillStyle = accent;
+      g.shadowColor = accent; g.shadowBlur = 26*(W/1280);
+    } else { g.fillStyle = "#FFFFFF"; }
+    g.fillText(ww.w.toUpperCase(), 0, 0);
+    g.restore();
+    if (state===1) ballX = x + wd/2;
+    x += wd + space*fit;
+  }
+
+  if (S.ball && ballX !== null){
+    var useImg = (S.ballStyle === "image") && BALL_READY;
+    // l'illustration est un carré dont le ballon occupe la diagonale : à
+    // taille de ballon égale, sa boîte doit être plus grande que celle du
+    // ballon dessiné, qui est posé à plat.
+    var bw = maxSize*fit*(useImg ? 1.05 : 0.46), bh = useImg ? bw : bw*22/34;
+    var hop = Math.abs(Math.sin(t*Math.PI/0.38)) * (useImg ? bh*0.55 : bh*1.5);
+    var by = baseline - maxSize*fit*0.72 - bh*(useImg ? 0.52 : 1) - hop;
+    g.save();
+    g.translate(ballX, by);
+    if (useImg){
+      // l'image est bien plus grande que son affichage : elle n'est
+      // jamais agrandie, seulement réduite
+      g.drawImage(BALL_IMG, -bw/2, -bh/2, bw, bh);
+    } else {
+      g.fillStyle = accent;
+      g.beginPath(); g.ellipse(0,0,bw/2,bh/2,0,0,Math.PI*2); g.fill();
+      g.fillStyle = "#0A1F44";
+      g.fillRect(-bw*0.035, -bh*0.40, bw*0.07, bh*0.80);
+      g.fillRect(-bw*0.33, -bh*0.055, bw*0.66, bh*0.11);
+    }
+    g.restore();
+  }
+  g.restore();
+}
+
+function drawScene(g, W, H, t){
+  drawBackground(g, W, H, t);
+  drawLine(g, W, H, t);
+}
+function draw(t){ drawScene(g, cv.width, cv.height, t); }
+
+// =====================================================================
+// 5. Onde et repères
+// =====================================================================
+var wv = $("wave"), wg = wv.getContext("2d");
+function drawWave(t){
+  var w = wv.width, h = wv.height;
+  wg.clearRect(0,0,w,h);
+  wg.fillStyle = "#0E1017"; wg.fillRect(0,0,w,h);
+  var d = Math.max(0.001, A.dur), i;
+  // phrases chantées détectées : le fond du couloir
+  if (A.an){
+    wg.fillStyle = "rgba(92,194,142,.11)";
+    for (i=0;i<A.an.segs.length;i++){
+      var s0 = (A.an.segs[i].s/d)*w, s1 = (A.an.segs[i].e/d)*w;
+      wg.fillRect(s0, 0, Math.max(1, s1-s0), h);
+    }
+  }
+  if (A.env){
+    wg.fillStyle = "#2F3546";
+    for (var x=0;x<w;x++){
+      var k2 = Math.floor(x/w * A.env.n);
+      var v = A.env.rms[k2]/A.env.peak;
+      var hh = Math.max(1, v*h*0.86);
+      wg.fillRect(x, (h-hh)/2, 1, hh);
+    }
+  }
+  // attaques détectées : petites encoches en bas
+  if (A.an){
+    wg.fillStyle = "rgba(255,255,255,.28)";
+    for (i=0;i<A.an.onsets.length;i++) wg.fillRect((A.an.onsets[i]/d)*w, h-6, 1, 6);
+  }
+  // repères de ligne
+  for (var k=0;k<A.lines.length;k++){
+    var L = A.lines[k];
+    if (L.pause || L.start===undefined) continue;
+    var px = (L.start/Math.max(0.001,A.dur))*w;
+    wg.fillStyle = (k===A.sel) ? "#FFCC00" : "rgba(255,255,255,.30)";
+    wg.fillRect(px, 0, k===A.sel?2:1, h);
+  }
+  // tête de lecture
+  var p = (t/Math.max(0.001,A.dur))*w;
+  wg.fillStyle = "#FF5A4D";
+  wg.fillRect(p-1, 0, 2, h);
+}
+
+// =====================================================================
+// 6. Transport
+// =====================================================================
+// Le temps écoulé DANS LE MORCEAU : à vitesse réduite, une seconde
+// d'horloge avance de moins d'une seconde d'audio.
+function now(){ return A.playing ? (audioCtx().currentTime - A.t0) * A.rate + A.off : A.off; }
+
+function play(){
+  if (!A.buf || A.playing) return;
+  var c = audioCtx();
+  if (c.state === "suspended") c.resume();
+  A.src = c.createBufferSource();
+  A.src.buffer = A.buf;
+  A.src.connect(c.destination);
+  try { A.src.playbackRate.value = A.rate; } catch (e) {}
+  var start = Math.min(A.off, A.dur-0.05);
+  A.src.start(0, Math.max(0,start));
+  A.t0 = c.currentTime; A.playing = true;
+  $("play").textContent = "❚❚ Pause";
+  A.src.onended = function(){ if (A.playing && now() >= A.dur-0.06) stop(true); };
+}
+function stop(toEnd){
+  if (A.src){ try{ A.src.onended=null; A.src.stop(); }catch(e){} A.src=null; }
+  if (A.playing) A.off = Math.min(A.dur, now());
+  if (toEnd) A.off = 0;
+  A.playing = false;
+  $("play").textContent = "▶ Lecture";
+  if (!A.tapSeek) endTap();
+}
+function seek(t){
+  var was = A.playing;
+  stop(false);
+  A.off = Math.max(0, Math.min(A.dur-0.05, t));
+  if (was) play();
+}
+// déplacement interne au mode calage : ne doit pas l'interrompre
+function tapSeek(t){
+  A.tapSeek = true;
+  try { seek(t); } finally { A.tapSeek = false; }
+}
+function setRate(r){
+  A.rate = r;
+  var t = now(), was = A.playing;
+  if (was){ A.tapSeek = true; stop(false); A.off = t; play(); A.tapSeek = false; }
+  var b = document.querySelectorAll("#rates .btn");
+  for (var i=0;i<b.length;i++) b[i].classList.toggle("primary", parseFloat(b[i].dataset.r) === r);
+}
+
+function fmt(t){
+  t = Math.max(0,t);
+  var m = Math.floor(t/60), s = Math.floor(t%60), c = Math.floor((t%1)*100);
+  return (m<10?"0":"")+m+":"+(s<10?"0":"")+s+","+(c<10?"0":"")+c;
+}
+
+function loop(){
+  var t = now();
+  if (A.playing && t >= A.dur){ stop(true); t = 0; }
+  draw(t);
+  drawWave(t);
+  $("tc").textContent = fmt(t)+" / "+fmt(A.dur);
+  highlight(t);
+  requestAnimationFrame(loop);
+}
+
+// =====================================================================
+// 7. Liste des lignes
+// =====================================================================
+function renderList(){
+  var el = $("lylist");
+  el.innerHTML = "";
+  for (var i=0;i<A.lines.length;i++){
+    var L = A.lines[i];
+    var d = document.createElement("div");
+    d.className = "ly" + (L.pause?" pause":"") + (i===A.sel?" cur":"");
+    d.dataset.i = i;
+    var col = "var(--line-2)", ring = "";
+    if (!L.pause && L.conf !== undefined)
+      col = L.conf >= 0.72 ? "var(--ok)" : (L.conf >= 0.45 ? "var(--warn)" : "var(--danger)");
+    if (L.pin) ring = ";box-shadow:0 0 0 2px rgba(255,204,0,.55)";
+    d.title = L.pin ? "calée à la main"
+           : (L.conf===undefined ? "" : "confiance "+Math.round(L.conf*100)+" %"+(L.why?" — "+L.why:""));
+    d.innerHTML = '<span class="i">'+(i+1)+'</span>'+
+                  '<span class="c" style="background:'+col+ring+'"></span>'+
+                  '<span class="t">'+(L.pause? "— silence —" : esc(L.text))+'</span>'+
+                  '<span class="s">'+(L.start===undefined?"—":fmt(L.start))+'</span>';
+    el.appendChild(d);
+  }
+}
+function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+
+function highlight(t){
+  var el = $("lylist"); if (!el.children.length) return;
+  var act = -1;
+  for (var i=0;i<A.lines.length;i++){
+    if (!A.lines[i].pause && A.lines[i].start <= t) act = i;
+  }
+  for (i=0;i<el.children.length;i++){
+    var c = el.children[i];
+    c.classList.toggle("done", i < act);
+    c.classList.toggle("cur", i === (A.tapping ? A.tapIndex : A.sel));
+  }
+}
+
+// =====================================================================
+// 8. Calage au clavier
+//
+// C'est la seule façon d'obtenir un calage juste sans reconnaissance de
+// la parole : vous écoutez une fois et tapez Espace au début de chaque
+// ligne. Le découpage des MOTS à l'intérieur des lignes reste
+// automatique — il se pose sur les attaques détectées — donc taper 40
+// fois suffit à caler un morceau entier.
+//
+// Trois choses rendent l'exercice tenable : on peut démarrer où l'on
+// veut, revenir sur la dernière ligne quand on a tapé trop tôt, et
+// ralentir la lecture sans changer la hauteur du texte affiché.
+// =====================================================================
+function startTap(fromSel){
+  if (!A.buf || !A.lines.length) return;
+  var i = 0;
+  if (fromSel && A.sel > 0) i = A.sel;
+  while (i < A.lines.length && A.lines[i].pause) i++;      // on ne tape pas les silences
+  if (i >= A.lines.length) i = 0;
+  A.tapping = true; A.tapIndex = i;
+  A.tapMarks = [];                                        // pour revenir en arrière
+  $("tapbar").classList.add("on");
+  $("tap").textContent = "Arrêter (Échap)";
+  var from = (i > 0 && A.lines[i].start > 1.2) ? A.lines[i].start - 1.2 : 0;
+  A.tapSeek = true; seek(from); A.tapSeek = false;
+  play();
+  updateTapLabel();
+}
+function endTap(){
+  if (!A.tapping) return;
+  A.tapping = false;
+  $("tapbar").classList.remove("on");
+  $("tap").textContent = "Caler au clavier";
+  // les lignes tapées sont des points fixes : le solveur replace le reste
+  if (!A.an || !alignLines()) rebuildWords();
+  renderList(); saveSoon();
+}
+function nextSung(i){
+  while (i < A.lines.length && A.lines[i].pause) i++;
+  return i;
+}
+function prevSung(i){
+  i--;
+  while (i >= 0 && A.lines[i].pause) i--;
+  return i;
+}
+function updateTapLabel(){
+  var L = A.lines[A.tapIndex];
+  var nx = A.lines[nextSung(A.tapIndex + 1)];
+  var done = 0, total = 0;
+  for (var i=0;i<A.lines.length;i++){
+    if (A.lines[i].pause) continue;
+    total++;
+    if (i < A.tapIndex) done++;
+  }
+  $("tapnow").textContent = L ? L.text : "Terminé";
+  $("tapnext").textContent = nx ? ("puis : " + nx.text) : "dernière ligne";
+  $("tapcount").textContent = total ? (done + " / " + total) : "";
+}
+function tapNow(){
+  if (!A.tapping) return;
+  var L = A.lines[A.tapIndex];
+  if (!L){ endTap(); return; }
+  A.tapMarks.push({ i: A.tapIndex, start: L.start, pin: !!L.pin, conf: L.conf });
+  L.start = now(); L.conf = 1; L.pin = true;
+  var nx = nextSung(A.tapIndex + 1);
+  if (nx >= A.lines.length){ endTap(); return; }
+  A.tapIndex = nx;
+  updateTapLabel(); renderList();
+}
+// Espace tapé trop tôt : on annule la dernière marque et on recule la
+// lecture juste avant, pour retenter sans tout reprendre.
+function tapBack(){
+  if (!A.tapping || !A.tapMarks.length) return;
+  var m = A.tapMarks.pop();
+  var L = A.lines[m.i];
+  L.start = m.start; L.pin = m.pin; L.conf = m.conf;
+  A.tapIndex = m.i;
+  var back = Math.max(0, (typeof m.start === "number" ? m.start : now()) - 1.5);
+  tapSeek(back);
+  if (!A.playing) play();
+  updateTapLabel(); renderList();
+}
+
+// =====================================================================
+// 9. Chargement
+// =====================================================================
+function applyLyrics(raw){
+  var r = cleanLyrics(raw);
+  var keep = [];
+  for (var i=0;i<r.lines.length;i++) keep.push({text:r.lines[i].text, pause:r.lines[i].pause, words:[], start:0});
+  A.lines = keep;
+  A.sel = 0;
+  renderReport(r.removed, keep.filter(function(l){return !l.pause;}).length);
+  autoPlace(); renderList();
+}
+
+function loadBuffer(buf, name, badge){
+  A.buf = buf; A.dur = buf.duration; A.off = 0;
+  A.env = buildEnvelope(buf);
+  A.an = null;
+  A.name = name;
+  $("srcbadge").textContent = badge;
+  spreadEvenly(); renderList();
+  runAnalysis();
+}
+
+function setAlign(txt){ $("algbadge").textContent = txt; }
+
+// L'analyse est lourde : on laisse le navigateur peindre le statut d'abord.
+function runAnalysis(cb){
+  if (!A.buf){ if (cb) cb(false); return; }
+  setAlign("analyse du son…");
+  setTimeout(function(){
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    try { A.an = analyse(A.buf); }
+    catch (e){ A.an = null; setAlign("analyse impossible"); if (cb) cb(false); return; }
+    var ok = false;
+    try { ok = alignLines(); } catch (e2){ ok = false; }
+    if (!ok) spreadEvenly();
+    renderList();
+    var ms = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
+    setAlign(ok ? (A.an.segs.length+" phrases · "+A.an.onsets.length+" attaques")
+                : "peu de matière : répartition simple");
+    if (cb) cb(ok);
+  }, 30);
+}
+
+// Le calage produit par le panneau After Effects, réinjecté ici :
+// c'est la qualité de référence, puisqu'il vient d'une transcription.
+function importPluginJSON(txt){
+  var data;
+  try { data = JSON.parse(txt); } catch (e){ setAlign("JSON illisible"); return false; }
+  if (!data || !data.words || !data.words.length){ setAlign("JSON sans mots"); return false; }
+  var byLine = {}, order = [], i;
+  for (i=0;i<data.words.length;i++){
+    var w = data.words[i], li = (w.line===undefined) ? 0 : w.line;
+    if (!byLine[li]){ byLine[li] = []; order.push(li); }
+    byLine[li].push({w:String(w.w), s:+w.s, e:+w.e, lvl:(w.lvl===undefined?1:+w.lvl), db:(w.db===undefined?-20:+w.db)});
+  }
+  order.sort(function(a,b){ return a-b; });
+  var lines = [];
+  for (i=0;i<order.length;i++){
+    var ws = byLine[order[i]];
+    ws.sort(function(a,b){ return a.s-b.s; });
+    var txtLine = [];
+    for (var j=0;j<ws.length;j++) txtLine.push(ws[j].w);
+    lines.push({text:txtLine.join(" "), pause:false, words:ws, start:ws[0].s, conf:1});
+  }
+  if (!lines.length) return false;
+  A.lines = lines; A.sel = 0;
+  $("raw").value = lines.map(function(l){ return l.text; }).join("\n");
+  renderReport({head:0,credit:0,rep:0,blank:0}, lines.length);
+  renderList();
+  var c = [0,0,0];
+  for (i=0;i<lines.length;i++) for (j=0;j<lines[i].words.length;j++) c[lines[i].words[j].lvl]++;
+  setStat(c[0],c[1],c[2]);
+  setAlign("calage du plugin ("+data.words.length+" mots)");
+  return true;
+}
+
+// Démo de synthèse : une « voix » au centre, une syllabe par impulsion,
+// avec respiration entre les lignes — plus un accompagnement large en
+// stéréo et une basse, pour que la mise en avant du centre serve à
+// quelque chose. Les instants de départ sont connus : ils servent aussi
+// de vérité terrain quand on mesure la précision du calage.
+var DEMO_TRUTH = [];
+function makeDemo(lines){
+  var c = audioCtx(), sr = c.sampleRate;
+  // on établit d'abord le déroulé, la durée en découle
+  var plan = [], Tp = 1.0, li, q;
+  for (li=0; li<lines.length; li++){
+    if (lines[li].pause){ Tp += 0.9; continue; }
+    var tkp = tokens(lines[li].text), np = 0;
+    for (q=0;q<tkp.length;q++) np += syllables(tkp[q]);
+    plan.push({line:li, t:Tp, syl:np});
+    Tp += np*0.30 + 0.75;
+  }
+  var dur = Math.max(6, Tp + 1.8);
+  var buf = c.createBuffer(2, Math.floor(sr*dur), sr);
+  var Lc = buf.getChannelData(0), Rc = buf.getChannelData(1);
+  var i, t;
+
+  for (i=0;i<Lc.length;i++){
+    t = i/sr;
+    var env = Math.min(1,t/1.5) * (t>dur-1.5 ? Math.max(0,(dur-t)/1.5) : 1);
+    var padL = Math.sin(2*Math.PI*164.8*t)*0.30 + Math.sin(2*Math.PI*246.9*t)*0.22;
+    var padR = Math.sin(2*Math.PI*164.8*t+1.9)*0.30 + Math.sin(2*Math.PI*246.9*t+2.4)*0.22;
+    var bass = Math.sin(2*Math.PI*55*t)*0.5;
+    Lc[i] = (padL*0.05 + bass*0.05)*env;
+    Rc[i] = (padR*0.05 + bass*0.05)*env;
+  }
+  for (var b=1; b*0.5 < dur; b++){
+    var st = Math.floor(b*0.5*sr);
+    for (i=0;i<sr*0.16 && st+i<Lc.length;i++){
+      var kk = i/(sr*0.16);
+      var v = Math.sin(2*Math.PI*58*(i/sr))*Math.exp(-kk*9)*0.28;
+      Lc[st+i]+=v; Rc[st+i]+=v;
+    }
+  }
+
+  DEMO_TRUTH = plan;
+  for (var pi=0; pi<plan.length; pi++){
+    var T = plan[pi].t, n = plan[pi].syl;
+    // dernière ligne nettement plus forte : la taille « crié » se voit
+    var loud = (pi === plan.length-1) ? 2.4 : (pi >= plan.length-2 ? 1.35 : 1);
+    for (var s2=0;s2<n;s2++){
+      var st2 = Math.floor((T + s2*0.30)*sr);
+      var f0 = 190 + 30*Math.sin(s2*1.3);
+      for (i=0;i<sr*0.26 && st2+i<Lc.length;i++){
+        var tt = i/sr;
+        var e2 = Math.min(1, tt/0.012) * Math.exp(-(tt/0.26)*3.2);
+        var v2 = ( Math.sin(2*Math.PI*f0*tt)*0.50
+                 + Math.sin(2*Math.PI*f0*2*tt)*0.30
+                 + Math.sin(2*Math.PI*f0*4*tt)*0.20
+                 + Math.sin(2*Math.PI*f0*6*tt)*0.14 ) * e2 * 0.24 * loud;
+        Lc[st2+i]+=v2; Rc[st2+i]+=v2;
+      }
+    }
+    T += n*0.30 + 0.75;
+  }
+  return buf;
+}
+
+// =====================================================================
+// 10. Export
+// =====================================================================
+function buildJSON(){
+  var words = [], li = 0;
+  for (var i=0;i<A.lines.length;i++){
+    var L = A.lines[i];
+    if (L.pause || !L.words.length) continue;
+    for (var j=0;j<L.words.length;j++){
+      var w = L.words[j];
+      words.push({ w:w.w, s:Math.round(w.s*1000)/1000, e:Math.round(w.e*1000)/1000,
+                   line:li, lvl:(w.lvl===undefined?1:w.lvl), db:Math.round(w.db*100)/100 });
+    }
+    li++;
+  }
+  return JSON.stringify({ audio:A.name, duration:Math.round(A.dur*1000)/1000,
+                          language:"fr", model:"studio-karaoke-proto", words:words }, null, 1);
+}
+
+// Téléchargement : sur un vrai site, c'est le navigateur qui le fait.
+// On fabrique un lien temporaire, on le déclenche, on le jette.
+function saveFile(blob, name){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+}
+
+$("dl").addEventListener("click", function(){
+  var txt = buildJSON();
+  var name = (A.name || "karaoke").replace(/\.[^.]+$/,"") + ".json";
+  try { saveFile(new Blob([txt], {type:"application/json"}), name); }
+  catch (e){ showFallback(txt); }
+});
+function showFallback(txt){
+  var ta = $("jsonout");
+  ta.style.display = "block"; ta.value = txt; ta.select();
+}
+
+
+// =====================================================================
+// 10 bis. Multiplexeur WebM — écrit ici, sans bibliothèque externe
+// =====================================================================
+function cat(parts){
+  var n = 0, i;
+  for (i=0;i<parts.length;i++) n += parts[i].length;
+  var out = new Uint8Array(n), o = 0;
+  for (i=0;i<parts.length;i++){ out.set(parts[i], o); o += parts[i].length; }
+  return out;
+}
+function vint(n){                       // longueur, encodage EBML
+  var len = 1, limit = 127;
+  while (n >= limit){ len++; limit = Math.pow(2, 7*len) - 1; }
+  var b = new Uint8Array(len), v = n + Math.pow(2, 7*len);
+  for (var i=len-1;i>=0;i--){ b[i] = v % 256; v = Math.floor(v/256); }
+  return b;
+}
+function beBytes(n){                    // entier non signé, gros-boutiste
+  if (n === 0) return new Uint8Array([0]);
+  var a = [];
+  while (n > 0){ a.unshift(n % 256); n = Math.floor(n/256); }
+  return new Uint8Array(a);
+}
+function el(id, payload){
+  return cat([beBytes(id), vint(payload.length), payload]);
+}
+function elU(id, n){ return el(id, beBytes(n)); }
+function elF(id, n){
+  var b = new Uint8Array(8); new DataView(b.buffer).setFloat64(0, n);
+  return el(id, b);
+}
+function elS(id, str){
+  var b = new Uint8Array(str.length);
+  for (var i=0;i<str.length;i++) b[i] = str.charCodeAt(i) & 255;
+  return el(id, b);
+}
+function opusHead(channels, rate){
+  var b = new Uint8Array(19), dv = new DataView(b.buffer);
+  var m = "OpusHead";
+  for (var i=0;i<8;i++) b[i] = m.charCodeAt(i);
+  b[8] = 1; b[9] = channels;
+  dv.setUint16(10, 312, true);
+  dv.setUint32(12, rate, true);
+  dv.setInt16(16, 0, true);
+  b[18] = 0;
+  return b;
+}
+function simpleBlock(track, relMs, key, data){
+  var head = cat([vint(track), new Uint8Array([(relMs>>8)&255, relMs&255]), new Uint8Array([key?0x80:0])]);
+  return el(0xA3, cat([head, data]));
+}
+
+function buildWebM(vw, vh, fps, chans, rate, chunks, durMs){
+  chunks.sort(function(a,b){ return a.t - b.t || a.track - b.track; });
+
+  var vTrack = el(0xAE, cat([
+    elU(0xD7, 1), elU(0x73C5, 1), elU(0x83, 1),
+    elS(0x86, "V_VP9"),
+    elU(0x23E383, Math.round(1e9/fps)),
+    el(0xE0, cat([elU(0xB0, vw), elU(0xBA, vh)]))
+  ]));
+  var aTrack = el(0xAE, cat([
+    elU(0xD7, 2), elU(0x73C5, 2), elU(0x83, 2),
+    elS(0x86, "A_OPUS"),
+    el(0x63A2, opusHead(chans, rate)),
+    el(0xE1, cat([elF(0xB5, rate), elU(0x9F, chans)]))
+  ]));
+
+  var clusters = [], cur = null, curStart = 0, i;
+  function closeCluster(){
+    if (!cur || !cur.length) return;
+    clusters.push(el(0x1F43B675, cat([elU(0xE7, curStart)].concat(cur))));
+    cur = null;
+  }
+  for (i=0;i<chunks.length;i++){
+    var c = chunks[i];
+    var newCluster = !cur || (c.track === 1 && c.key && (c.t - curStart) > 900) || (c.t - curStart) > 30000;
+    if (newCluster){ closeCluster(); cur = []; curStart = c.t; }
+    cur.push(simpleBlock(c.track, Math.max(0, Math.min(32767, c.t - curStart)), c.key, c.data));
+  }
+  closeCluster();
+
+  var header = el(0x1A45DFA3, cat([
+    elU(0x4286,1), elU(0x42F7,1), elU(0x42F2,4), elU(0x42F3,8),
+    elS(0x4282,"webm"), elU(0x4287,2), elU(0x4285,2)
+  ]));
+  var info = el(0x1549A966, cat([
+    elU(0x2AD7B1, 1000000),
+    elS(0x4D80, "Studio Karaoke"), elS(0x5741, "Studio Karaoke"),
+    elF(0x4489, durMs)
+  ]));
+  var tracks = el(0x1654AE6B, cat([vTrack, aTrack]));
+  var segment = el(0x18538067, cat([info, tracks].concat(clusters)));
+  return new Blob([header, segment], {type:"video/webm"});
+}
+
+// =====================================================================
+// 10 ter. Encodage de la vidéo
+// =====================================================================
+var rendering = false, cancelRender = false;
+
+function setProg(p, msg){
+  $("prog").classList.toggle("on", p !== null);
+  if (p !== null) $("progbar").style.width = Math.round(p*100)+"%";
+  if (msg !== undefined) $("rstat").innerHTML = msg;
+}
+
+async function resample48k(buf){
+  var frames = Math.ceil(buf.duration * 48000);
+  var oac = new OfflineAudioContext(2, frames, 48000);
+  var src = oac.createBufferSource();
+  src.buffer = buf; src.connect(oac.destination); src.start();
+  return await oac.startRendering();
+}
+
+async function renderVideo(){
+  if (rendering){ cancelRender = true; return; }
+  if (!A.buf){ setProg(null, "Chargez d'abord un audio."); return; }
+  if (typeof VideoEncoder === "undefined"){
+    setProg(null, "Ce navigateur ne sait pas encoder de vidéo (essayez Chrome ou Edge).");
+    return;
+  }
+  stop(false);
+  rendering = true; cancelRender = false;
+  $("render").textContent = "Annuler";
+  $("render").classList.remove("primary");
+
+  var d = $("res").value.split("x");
+  var VW = parseInt(d[0],10), VH = parseInt(d[1],10);
+  var fps = parseInt($("fps").value,10);
+  var bitrate = parseInt($("brate").value,10) * 1000000;
+  var total = Math.max(1, Math.ceil(A.dur * fps));
+  var chunks = [];
+  var t0 = performance.now();
+
+  try {
+    var vcfg = {codec:"vp09.00.10.08", width:VW, height:VH, bitrate:bitrate, framerate:fps};
+    var sup = await VideoEncoder.isConfigSupported(vcfg);
+    if (!sup || !sup.supported) throw new Error("VP9 non pris en charge à cette taille.");
+
+    var venc = new VideoEncoder({
+      output: function(chunk){
+        var buf = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(buf);
+        chunks.push({track:1, t:Math.round(chunk.timestamp/1000), key:chunk.type==="key", data:buf});
+      },
+      error: function(e){ throw e; }
+    });
+    venc.configure(vcfg);
+
+    setProg(0, "Préparation de l'audio…");
+    var rb = await resample48k(A.buf);
+    var aenc = new AudioEncoder({
+      output: function(chunk){
+        var buf = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(buf);
+        chunks.push({track:2, t:Math.round(chunk.timestamp/1000), key:true, data:buf});
+      },
+      error: function(e){ throw e; }
+    });
+    aenc.configure({codec:"opus", sampleRate:48000, numberOfChannels:2, bitrate:128000});
+
+    var L = rb.getChannelData(0);
+    var R = rb.numberOfChannels > 1 ? rb.getChannelData(1) : L;
+    var FR = 960, i, n;
+    for (i=0;i<rb.length;i+=FR){
+      n = Math.min(FR, rb.length - i);
+      var plane = new Float32Array(n*2);
+      plane.set(L.subarray(i, i+n), 0);
+      plane.set(R.subarray(i, i+n), n);
+      var ad = new AudioData({
+        format:"f32-planar", sampleRate:48000, numberOfFrames:n,
+        numberOfChannels:2, timestamp: Math.round(i/48000*1e6), data:plane
+      });
+      aenc.encode(ad); ad.close();
+      if ((i/FR) % 200 === 0) await new Promise(function(r){ setTimeout(r,0); });
+    }
+
+    var oc = document.createElement("canvas");
+    oc.width = VW; oc.height = VH;
+    var og = oc.getContext("2d", {alpha:false});
+
+    for (var f=0; f<total; f++){
+      if (cancelRender) break;
+      var t = f/fps;
+      drawScene(og, VW, VH, t);
+      var vf = new VideoFrame(oc, {timestamp: Math.round(t*1e6), duration: Math.round(1e6/fps)});
+      venc.encode(vf, {keyFrame: (f % (fps*2)) === 0});
+      vf.close();
+      while (venc.encodeQueueSize > 6) await new Promise(function(r){ setTimeout(r,0); });
+      if ((f & 7) === 0){
+        var el2 = (performance.now()-t0)/1000;
+        var rate = f>0 ? (f/el2) : 0;
+        var left = rate>0 ? Math.round((total-f)/rate) : 0;
+        setProg(f/total, "Image " + f + " / " + total +
+          (rate>1 ? " · " + (rate/fps).toFixed(1) + "× le temps réel · ~" + left + " s restantes" : ""));
+        await new Promise(function(r){ setTimeout(r,0); });
+      }
+    }
+
+    await venc.flush(); await aenc.flush();
+    venc.close(); aenc.close();
+
+    if (cancelRender){ setProg(null, "Rendu annulé."); return; }
+
+    setProg(1, "Assemblage du fichier…");
+    await new Promise(function(r){ setTimeout(r,30); });
+    var blob = buildWebM(VW, VH, fps, 2, 48000, chunks, Math.round(A.dur*1000));
+    var mo = (blob.size/1048576).toFixed(1);
+    var secs = ((performance.now()-t0)/1000).toFixed(0);
+    setProg(null, "Vidéo prête : <b>" + mo + " Mo</b> en " + secs + " s.");
+
+    var name = (A.name || "karaoke").replace(/\.[^.]+$/,"") + ".webm";
+    lastBlob = blob;
+    try { saveFile(blob, name); }
+    catch (err){ setProg(null, "Vidéo prête (" + mo + " Mo) — l'enregistrement a été refusé par le navigateur."); }
+  } catch(err){
+    setProg(null, "Échec du rendu : " + (err && err.message ? err.message : err));
+  } finally {
+    rendering = false; cancelRender = false;
+    $("render").textContent = "Fabriquer la vidéo";
+    $("render").classList.add("primary");
+  }
+}
+var lastBlob = null;
+
+// =====================================================================
+// 11. Branchements
+// =====================================================================
+$("render").addEventListener("click", renderVideo);
+$("play").addEventListener("click", function(){ A.playing ? stop(false) : play(); });
+$("rew").addEventListener("click", function(){ seek(0); });
+$("tap").addEventListener("click", function(){ A.tapping ? endTap() : startTap(true); });
+(function(){
+  var b = document.querySelectorAll("#rates .btn");
+  for (var i=0;i<b.length;i++) (function(el){
+    el.addEventListener("click", function(){ setRate(parseFloat(el.dataset.r)); });
+  })(b[i]);
+})();
+
+$("scrub").addEventListener("click", function(e){
+  var r = this.getBoundingClientRect();
+  seek(((e.clientX - r.left)/r.width) * A.dur);
+});
+
+$("lylist").addEventListener("click", function(e){
+  var row = e.target.closest ? e.target.closest(".ly") : null;
+  if (!row) return;
+  A.sel = parseInt(row.dataset.i,10);
+  renderList();
+});
+
+// Une correction manuelle épingle la ligne, puis relance le solveur :
+// la correction se propage aux lignes suivantes au lieu de rester seule.
+function pinLine(L, t){
+  L.start = clamp(t, 0, A.dur);
+  L.pin = true; L.conf = 1;
+  if (!A.an || !alignLines()) rebuildWords();
+  renderList(); saveSoon();
+}
+function nudge(dt){
+  var L = A.lines[A.sel]; if (!L) return;
+  pinLine(L, L.start + dt);
+}
+$("autoAlign").addEventListener("click", function(){
+  if (A.an){ if (!alignLines()) spreadEvenly(); renderList(); saveSoon(); }
+  else runAnalysis(function(){ saveSoon(); });
+});
+$("unpin").addEventListener("click", function(){
+  for (var i=0;i<A.lines.length;i++) A.lines[i].pin = false;
+  if (!alignLines()) spreadEvenly();
+  renderList(); saveSoon();
+});
+$("forget").addEventListener("click", forgetSaved);
+// Reconnaissance vocale. Whisper transcrit, puis on jette son texte pour
+// ne garder que ses instants, recollés sur VOS paroles. Le module et le
+// modèle ne se chargent qu'au premier clic : la page reste légère pour
+// qui ne s'en sert pas.
+var asrBusy = false;
+$("asrAlign").addEventListener("click", function(){
+  if (asrBusy) return;
+  if (!A.buf){ $("asrstat").textContent = "Chargez d'abord un morceau."; return; }
+  var lyr = $("raw").value.replace(/^\s+|\s+$/g, "");
+  if (!lyr){ $("asrstat").textContent = "Collez d'abord les paroles : ce sont elles qui font foi."; return; }
+  asrBusy = true;
+  $("asrAlign").disabled = true;
+  $("asrprog").hidden = false;
+  $("asrstat").textContent = "Chargement du modèle (une seule fois, puis gardé en cache)…";
+
+  var done = function(){
+    asrBusy = false;
+    $("asrAlign").disabled = false;
+    setTimeout(function(){ $("asrprog").hidden = true; $("asrbar").style.width = "0%"; }, 900);
+  };
+
+  import("./karaoke-asr.js").then(function(mod){
+    return mod.autoAlign(A.buf, lyr, {
+      model: "moyen", language: "fr", name: A.name,
+      onProgress: function(p){
+        if (!p) return;
+        if (p.status === "progress" && typeof p.progress === "number"){
+          $("asrbar").style.width = Math.round(p.progress) + "%";
+          $("asrstat").textContent = "Téléchargement du modèle : " + Math.round(p.progress) + " %";
+        } else if (p.status === "ready"){
+          $("asrbar").style.width = "100%";
+          $("asrstat").textContent = "Écoute du morceau…";
+        }
+      }
+    });
+  }).then(function(json){
+    importPluginJSON(JSON.stringify(json));
+    var pct = Math.round((json.matched || 0) * 100);
+    setAlign("reconnaissance · " + json.words.length + " mots");
+    $("asrstat").innerHTML = pct + " % des paroles retrouvées dans l'audio."
+      + (pct < 55 ? " <b>Peu fiable</b> : vérifiez les lignes, ou passez par « Caler au clavier »." : "");
+    saveSoon();
+    done();
+  }).catch(function(e){
+    $("asrstat").textContent = "Reconnaissance indisponible : "
+      + (e && e.message ? e.message : e) + " — le calage au clavier reste disponible.";
+    done();
+  });
+});
+
+$("impJson").addEventListener("click", function(){ $("jsonfile").click(); });
+$("jsonfile").addEventListener("change", function(){
+  var f = this.files && this.files[0];
+  if (!f) return;
+  var r = new FileReader();
+  r.onload = function(){ importPluginJSON(r.result); };
+  r.readAsText(f);
+  this.value = "";
+});
+
+$("nudgeL").addEventListener("click", function(){ nudge(-0.1); });
+$("nudgeR").addEventListener("click", function(){ nudge(0.1); });
+$("setHere").addEventListener("click", function(){
+  var L = A.lines[A.sel]; if (!L) return;
+  pinLine(L, now());
+});
+
+document.addEventListener("keydown", function(e){
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (!$("welcome").hidden) return;              // l'accueil a ses propres touches
+  if (e.code === "Space"){ e.preventDefault(); A.tapping ? tapNow() : (A.playing ? stop(false) : play()); }
+  else if (e.code === "Backspace" && A.tapping){ e.preventDefault(); tapBack(); }
+  else if (e.code === "Escape" && A.tapping){ endTap(); }
+  else if (e.code === "ArrowLeft" && !A.tapping){ e.preventDefault(); nudge(-0.05); }
+  else if (e.code === "ArrowRight" && !A.tapping){ e.preventDefault(); nudge(0.05); }
+});
+
+$("raw").addEventListener("input", function(){ applyLyrics(this.value); saveSoon(); });
+
+$("file").addEventListener("change", function(){
+  var f = this.files && this.files[0];
+  if (!f) return;
+  stop(false);
+  $("srcbadge").textContent = "décodage…";
+  f.arrayBuffer().then(function(ab){ return audioCtx().decodeAudioData(ab); })
+   .then(function(buf){ loadBuffer(buf, f.name, f.name); })
+   .catch(function(){ $("srcbadge").textContent = "format illisible"; });
+});
+
+function bindSlider(id, key, out, suffix){
+  var el = $(id);
+  el.addEventListener("input", function(){
+    S[key] = parseFloat(this.value);
+    $(out).textContent = this.value + (suffix||"");
+    saveSoon();
+  });
+}
+bindSlider("rSize","size","vSize");
+bindSlider("rReact","react","vReact");
+bindSlider("rPosY","posY","vPosY");
+$("cBall").addEventListener("change", function(){ S.ball = this.checked; saveSoon(); });
+$("sBallStyle").addEventListener("change", function(){ S.ballStyle = this.value; saveSoon(); });
+$("cShake").addEventListener("change", function(){ S.shake = this.checked; saveSoon(); });
+$("sScope").addEventListener("change", function(){
+  S.dynScope = parseInt(this.value, 10);
+  classify(); renderList(); saveSoon();
+});
+$("cDyn").addEventListener("change", function(){ S.dyn = this.checked; classify(); saveSoon(); });
+$("cAccent").addEventListener("input", function(){ S.accent = this.value; saveSoon(); });
+$("cBase").addEventListener("input", function(){ S.base = this.value; saveSoon(); });
+
+// =====================================================================
+// Accueil et navigation par étapes
+//
+// Les pastilles du haut ne décoraient rien : elles mènent maintenant
+// vraiment quelque part, et suivent la carte qu'on est en train de
+// regarder. « Accueil » rouvre l'écran d'ouverture.
+// =====================================================================
+var STEP_IDS = ["card-source","card-calage","card-style","card-rendu"];
+
+function markStep(id){
+  var b = $("steps").querySelectorAll("button");
+  for (var i=0;i<b.length;i++) b[i].classList.toggle("on", b[i].dataset.go === id);
+}
+
+function goToStep(id){
+  if (id === "accueil"){ openWelcome(); return; }
+  var el = $(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: prefersCalm() ? "auto" : "smooth", block: "start" });
+  el.classList.remove("landed");
+  void el.offsetWidth;                     // relance l'animation
+  el.classList.add("landed");
+  markStep(id);
+}
+
+function prefersCalm(){
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+  catch (e){ return false; }
+}
+
+(function bindSteps(){
+  var b = $("steps").querySelectorAll("button");
+  for (var i=0;i<b.length;i++) (function(el){
+    el.addEventListener("click", function(){ goToStep(el.dataset.go); });
+  })(b[i]);
+
+  // la pastille active suit la carte la plus haute encore visible
+  if (window.IntersectionObserver){
+    var seenNow = {};
+    var io = new IntersectionObserver(function(entries){
+      for (var k=0;k<entries.length;k++) seenNow[entries[k].target.id] = entries[k].isIntersecting;
+      for (var j=0;j<STEP_IDS.length;j++){
+        if (seenNow[STEP_IDS[j]]){ markStep(STEP_IDS[j]); return; }
+      }
+    }, { rootMargin: "-15% 0px -55% 0px" });
+    for (var j2=0;j2<STEP_IDS.length;j2++){
+      var el2 = $(STEP_IDS[j2]);
+      if (el2) io.observe(el2);
+    }
+  }
+  markStep("card-source");
+})();
+
+// ---------------------------------------------------------------------
+// L'écran d'accueil. Le ballon rebondit de mot en mot sur le titre :
+// c'est exactement ce que fait le produit, montré avant de l'expliquer.
+// ---------------------------------------------------------------------
+var wTimer = null;
+
+function openWelcome(){
+  $("welcome").hidden = false;
+  markStep("accueil");
+  startTitleBall();
+  try { $("wstart").focus(); } catch (e){}
+}
+
+function closeWelcome(){
+  $("welcome").hidden = true;
+  if (wTimer){ clearInterval(wTimer); wTimer = null; }
+  markStep("card-source");
+  saveSoon();
+  A.seenWelcome = true;
+}
+
+function startTitleBall(){
+  var words = $("wtitle").querySelectorAll(".w");
+  var ball = $("wball");
+  var img = ball.querySelector("img");
+  if (!img.getAttribute("src")) img.src = BALL_IMG_SRC;
+  if (!words.length) return;
+
+  var i = 0;
+  function place(k){
+    var w = words[k];
+    var x = w.offsetLeft + w.offsetWidth/2 - ball.offsetWidth/2;
+    var y = w.offsetTop - ball.offsetHeight*0.72;
+    ball.style.transform = "translate(" + Math.round(x) + "px," + Math.round(y) + "px)";
+    for (var j=0;j<words.length;j++){
+      words[j].classList.toggle("on", j === k);
+      words[j].classList.toggle("done", j < k);
+    }
+  }
+  place(0);
+  if (wTimer) clearInterval(wTimer);
+  if (prefersCalm()) return;               // pas d'animation si on la refuse
+  wTimer = setInterval(function(){
+    i = (i + 1) % (words.length + 1);
+    if (i === words.length){               // un temps mort, puis on repart
+      for (var j=0;j<words.length;j++) words[j].classList.remove("on","done");
+      return;
+    }
+    place(i);
+  }, 780);
+}
+
+$("wstart").addEventListener("click", closeWelcome);
+$("wdemo").addEventListener("click", function(){
+  closeWelcome();
+  A.off = 3.6;
+  if (!A.playing) play();
+});
+document.addEventListener("keydown", function(e){
+  if (!$("welcome").hidden && (e.code === "Escape" || e.code === "Enter")){
+    e.preventDefault(); closeWelcome();
+  }
+});
+// le titre se remet en place si la fenêtre change de largeur
+window.addEventListener("resize", function(){
+  if (!$("welcome").hidden) startTitleBall();
+});
+
+// =====================================================================
+// Mémoire de la page
+//
+// Ce que vous changez ici — paroles, calage, lignes épinglées, style —
+// est réenregistré côté serveur et repris à la prochaine ouverture.
+// L'AUDIO n'y est pas : un fichier son ne se stocke pas ici, et de
+// toute façon le morceau par défaut est déjà dans la page. Si la
+// mémoire n'est pas disponible, la page fonctionne exactement comme
+// avant, sans rien retenir.
+// =====================================================================
+// Mémoire : le stockage du navigateur. Elle reste sur la machine du
+// visiteur — rien n'est envoyé nulle part, et il n'y a aucun service à
+// payer. Chaque navigateur a donc sa propre mémoire, et la vider revient
+// à repartir du morceau fourni.
+var MEMKEY = "studio-karaoke/etat", restored = false, saveTimer = null;
+
+function memAvailable(){
+  try {
+    var k = "__t"; localStorage.setItem(k, "1"); localStorage.removeItem(k);
+    return true;
+  } catch (e){ return false; }         // navigation privée, cookies bloqués…
+}
+var MEM = memAvailable();
+
+function snapshotState(){
+  var lines = [];
+  for (var i=0;i<A.lines.length;i++){
+    var L = A.lines[i];
+    lines.push({ t: L.pause ? null : L.text,
+                 s: Math.round((L.start||0)*1000)/1000,
+                 p: !!L.pin });
+  }
+  return {
+    v: 1,
+    audio: A.name || "",
+    seen: !!A.seenWelcome,
+    raw: $("raw").value,
+    lines: lines,
+    style: { ball:S.ball, ballStyle:S.ballStyle, dyn:S.dyn, dynScope:S.dynScope,
+             shake:S.shake, accent:S.accent, base:S.base,
+             size:S.size, react:S.react, posY:S.posY },
+    at: new Date().toISOString()
+  };
+}
+
+function saveSoon(){
+  if (!MEM || !restored) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    saveTimer = null;
+    try {
+      localStorage.setItem(MEMKEY, JSON.stringify(snapshotState()));
+      $("memstat").textContent = "enregistré";
+      setTimeout(function(){
+        if ($("memstat").textContent === "enregistré") $("memstat").textContent = "mémoire active";
+      }, 1600);
+    } catch (e){
+      $("memstat").textContent = "mémoire pleine";
+    }
+  }, 900);
+}
+
+function restoreSaved(){
+  if (!MEM || restored || !A.lines.length) return;
+  restored = true;
+  $("memstat").textContent = "mémoire active";
+  var d = null;
+  try { d = JSON.parse(localStorage.getItem(MEMKEY) || "null"); } catch (e){ d = null; }
+  if (!d || d.v !== 1) return;
+  try {
+    if (d.seen){
+      A.seenWelcome = true; $("welcome").hidden = true;
+      if (wTimer){ clearInterval(wTimer); wTimer = null; }
+      markStep("card-source");
+    }
+    if (d.style){
+      var k;
+      for (k in d.style) if (S[k] !== undefined && d.style[k] !== undefined) S[k] = d.style[k];
+      syncStyleUI();
+    }
+    if (typeof d.raw === "string" && d.raw !== $("raw").value){
+      $("raw").value = d.raw;
+      applyLyrics(d.raw);
+    }
+    if (d.lines && d.lines.length === A.lines.length){
+      for (var i=0;i<A.lines.length;i++){
+        if (typeof d.lines[i].s === "number") A.lines[i].start = d.lines[i].s;
+        A.lines[i].pin = !!d.lines[i].p;
+      }
+      rebuildWords(); renderList();
+      setAlign("calage repris de la dernière visite");
+    }
+  } catch (e){}
+}
+
+function syncStyleUI(){
+  try {
+    $("cBall").checked = S.ball;
+    $("sBallStyle").value = S.ballStyle;
+    $("cDyn").checked = S.dyn;
+    $("sScope").value = String(S.dynScope);
+    $("cShake").checked = S.shake;
+    $("cAccent").value = S.accent;
+    $("cBase").value = S.base;
+    $("rSize").value = S.size;   $("vSize").textContent = S.size;
+    $("rReact").value = S.react; $("vReact").textContent = S.react;
+    $("rPosY").value = S.posY;   $("vPosY").textContent = S.posY;
+  } catch (e){}
+}
+
+function forgetSaved(){
+  try { localStorage.removeItem(MEMKEY); } catch (e){}
+  $("memstat").textContent = "mémoire effacée";
+  $("raw").value = DEMO_LYRICS;
+  applyLyrics(DEMO_LYRICS);
+  importPluginJSON(JSON.stringify(SONG_TIMINGS));
+  setAlign("calage fourni · " + SONG_TIMINGS.words.length + " mots");
+}
+
+// =====================================================================
+// Démarrage
+// =====================================================================
+// Le morceau embarqué, avec son calage validé. On décode d'abord, on
+// analyse ensuite (le fond réactif en a besoin), et on repose enfin les
+// timings exacts par-dessus : aucun recalage automatique n'écrase le
+// travail fait à la main.
+function loadDefaultSong(){
+  setAlign("décodage du morceau…");
+  fetch(SONG_URL).then(function(r){
+    if (!r.ok) throw new Error("fichier absent");
+    return r.arrayBuffer();
+  }).then(function(ab){
+    return audioCtx().decodeAudioData(ab);
+  }).then(function(buf){
+    A.buf = buf; A.dur = buf.duration; A.off = 0;
+    A.env = buildEnvelope(buf);
+    A.an = null;
+    A.name = SONG_TIMINGS.audio || "chanson";
+    $("srcbadge").textContent = shortName(A.name);
+    runAnalysis(function(){
+      importPluginJSON(JSON.stringify(SONG_TIMINGS));
+      setAlign("calage fourni · " + SONG_TIMINGS.words.length + " mots");
+      restoreSaved();                    // ce que vous aviez modifié reprend la main
+    });
+  }).catch(function(){ fallbackDemo("décodage impossible"); });
+}
+
+function shortName(n){
+  n = String(n).replace(/\.[^.]+$/, "");
+  return n.length > 26 ? n.slice(0, 24) + "…" : n;
+}
+
+// Si le morceau embarqué ne se décode pas, la page reste utilisable :
+// on retombe sur la démo de synthèse plutôt que sur un écran mort.
+function fallbackDemo(why){
+  $("srcbadge").textContent = why;
+  applyLyrics($("raw").value);
+  loadBuffer(makeDemo(A.lines), "demo", "démo de synthèse");
+}
+
+function boot(){
+  $("raw").value = DEMO_LYRICS;
+  applyLyrics(DEMO_LYRICS);                       // parse : donne les lignes
+  loadDefaultSong();
+  A.off = 3.6;                                    // première phrase chantée
+  startTitleBall();
+  if (!$("welcome").hidden) markStep("accueil");
+  loop();
+}
+
+// poignée de mise au point : sert aux mesures de précision du calage
+window.__ka = {
+  A:A, S:S, TUNE:TUNE, analyse:analyse, alignLines:alignLines, spreadEvenly:spreadEvenly,
+  syllables:syllables, runAnalysis:runAnalysis, loadBuffer:loadBuffer,
+  applyScope:applyScope, classify:classify,
+  makeDemo:makeDemo, applyLyrics:applyLyrics, importPluginJSON:importPluginJSON,
+  truth:function(){ return DEMO_TRUTH; },
+  song:SONG_TIMINGS, loadDefaultSong:loadDefaultSong
+};
+
+// On attend la police pour que les mesures de largeur soient justes,
+// mais jamais longtemps : si le service de polices est lent ou bloqué,
+// la page démarre quand même avec la police de repli.
+(function(){
+  var started = false;
+  function go(){ if (!started){ started = true; boot(); } }
+  setTimeout(go, 2500);
+  if (document.fonts && document.fonts.load){
+    document.fonts.load("400 80px Anton").then(go).catch(go);
+  } else { go(); }
+})();
+
+})();
+</script>
+\n</body>\n</html>\n
