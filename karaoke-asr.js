@@ -53,9 +53,26 @@ export async function loadASR({ model = 'moyen', onProgress } = {}) {
     'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js'
   );
   env.allowLocalModels = false;
+  // CALCUL PROCESSEUR, TOUJOURS.
+  //
+  // Sur carte graphique (WebGPU), Whisper ne sort ici que du charabia
+  // multilingue en boucle — et, signe qui ne trompe pas, EXACTEMENT la
+  // même suite de jetons quels que soient le modèle (base, base
+  // _timestamped, small) et la précision (q8, encodeur en fp32). Le
+  // modèle n'entend donc pas l'audio du tout : l'encodeur rend du bruit,
+  // et le décodeur, n'ayant rien à quoi se raccrocher, radote.
+  //
+  // Le même audio, le même modèle, en processeur : « Ah SM, tout s'en
+  // route pour le stade ». Mesuré sur le chant ASM (67 s) : 12 secondes
+  // de calcul, 66 mots datés. Cinq fois plus rapide que le temps réel,
+  // donc la lenteur supposée du processeur n'est pas un argument.
+  //
+  // La panne est silencieuse — pas d'erreur, juste du faux — donc pas
+  // question de « tenter la carte graphique et voir ». On ne l'utilise
+  // pas.
   _pipe = await pipeline('automatic-speech-recognition', name, {
     dtype: 'q8',                       // quantifié : ~4× plus léger
-    device: (navigator.gpu ? 'webgpu' : 'wasm'),
+    device: 'wasm',
     progress_callback: onProgress
   });
   _pipeName = name;
@@ -70,48 +87,90 @@ export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr'
   // language === 'auto' : on laisse Whisper décider (option simplement omise)
   const asr = await loadASR({ model, onProgress });
   const mono = normalise(toMono16k(audioBuffer, { centre }));
-  // 29 et non 30 : à exactement 30, la datation des mots dégénère et
-  // tous les mots d'une tranche reçoivent le même instant (bug connu de
-  // transformers.js). Une seconde de moins suffit à l'éviter.
-  const COMMON = { task: 'transcribe', chunk_length_s: 29, stride_length_s: 5 };
+
+  const COMMON = { task: 'transcribe' };
   if (language && language !== 'auto') COMMON.language = language;
 
-  let out, mode = 'word';
-  try {
-    out = await asr(mono, Object.assign({ return_timestamps: 'word' }, COMMON));
-  } catch (e) {
-    // Filet de sécurité : si la datation par mot n'est pas disponible
-    // (modèle sans attentions croisées), on retombe sur la datation par
-    // phrase. C'est moins fin, mais le recollage sur vos paroles s'en
-    // accommode — il vaut toujours mieux que rien.
-    mode = 'phrase';
-    out = await asr(mono, Object.assign({ return_timestamps: true }, COMMON));
-  }
+  // ON DÉCOUPE NOUS-MÊMES.
+  //
+  // Whisper n'écoute que 30 secondes à la fois. Confier le découpage à la
+  // bibliothèque (chunk_length_s / stride_length_s) donne un texte juste
+  // mais des INSTANTS FAUX : mesuré sur le chant ASM, les quatre
+  // premières lignes tombent à 0,1–0,5 s près, et tout ce qui suit dérive
+  // de 20 à 40 secondes, jusqu'à se placer après la fin du morceau.
+  //
+  // Les mêmes fenêtres transcrites une par une, en revanche, sont justes :
+  // 0–28 s rend « Ah SM, tout s'en route pour le stade » daté 0,3 → 27,5,
+  // et 28–56 s repart proprement à 0. Il suffit donc d'ajouter le décalage
+  // de la fenêtre. C'est ce que fait le code ci-dessous.
+  const SR = 16000, FEN = 28, RECOUV = 3;      // fenêtre, et son recouvrement
+  const PAS = FEN - RECOUV;
+  const dur = mono.length / SR;
+  const debuts = [];
+  for (let t = 0; t < dur; t += PAS) debuts.push(t);
+  if (debuts.length > 1 && dur - debuts[debuts.length - 1] < 1.5) debuts.pop();
 
-  const chunks = (out && out.chunks) ? out.chunks : [];
+  let mode = 'word';
   const words = [];
-  for (const c of chunks) {
-    const t = (c.timestamp || [])[0], u = (c.timestamp || [])[1];
-    const txt = String(c.text || '').trim();
-    if (!txt || typeof t !== 'number') continue;
-    const end = (typeof u === 'number' && u > t) ? u : t + 0.25;
 
-    if (mode === 'word') { words.push({ w: txt, s: t, e: end }); continue; }
+  for (let k = 0; k < debuts.length; k++) {
+    const d0 = debuts[k];
+    const tranche = mono.slice(Math.round(d0 * SR), Math.round(Math.min(dur, d0 + FEN) * SR));
+    if (tranche.length < SR * 0.5) continue;
 
-    // une phrase entière : on répartit sa durée sur ses mots, au prorata
-    // du nombre de lettres
-    const parts = txt.split(/\s+/).filter(Boolean);
-    if (!parts.length) continue;
-    const total = parts.reduce((a, w) => a + w.length, 0) || parts.length;
-    let cur = t;
-    for (const w of parts) {
-      const d = (end - t) * (w.length / total);
-      words.push({ w, s: cur, e: cur + d * 0.92 });
-      cur += d;
+    let out;
+    try {
+      out = await asr(tranche, Object.assign({ return_timestamps: 'word' }, COMMON));
+    } catch (e) {
+      // Filet de sécurité : si la datation par mot n'est pas disponible
+      // (modèle sans attentions croisées), on retombe sur la datation par
+      // phrase. C'est moins fin, mais le recollage sur vos paroles s'en
+      // accommode — il vaut toujours mieux que rien.
+      mode = 'phrase';
+      out = await asr(tranche, Object.assign({ return_timestamps: true }, COMMON));
     }
+
+    // On coupe le recouvrement en deux : la première moitié appartient à
+    // la fenêtre précédente, la seconde à celle-ci. Un mot n'est donc
+    // jamais compté deux fois.
+    const planche = (k === 0) ? -1 : d0 + RECOUV / 2;
+    const plafond = (k === debuts.length - 1) ? dur + 1 : d0 + FEN - RECOUV / 2;
+
+    for (const c of ((out && out.chunks) ? out.chunks : [])) {
+      const t = (c.timestamp || [])[0], u = (c.timestamp || [])[1];
+      const txt = String(c.text || '').trim();
+      if (!txt || typeof t !== 'number') continue;
+      const fin = (typeof u === 'number' && u > t) ? u : t + 0.25;
+
+      if (mode === 'word') {
+        const abs = d0 + t;
+        if (abs < planche || abs >= plafond) continue;
+        words.push({ w: txt, s: abs, e: d0 + fin });
+        continue;
+      }
+
+      // une phrase entière : on répartit sa durée sur ses mots, au prorata
+      // du nombre de lettres
+      const parts = txt.split(/\s+/).filter(Boolean);
+      if (!parts.length) continue;
+      const total = parts.reduce((a, w) => a + w.length, 0) || parts.length;
+      let cur = t;
+      for (const w of parts) {
+        const dd = (fin - t) * (w.length / total);
+        const abs = d0 + cur;
+        if (abs >= planche && abs < plafond) words.push({ w, s: abs, e: abs + dd * 0.92 });
+        cur += dd;
+      }
+    }
+
+    // une vraie progression : on sait combien de fenêtres il reste
+    if (onProgress) onProgress({ status: 'listening', done: k + 1, total: debuts.length });
   }
+
+  words.sort((a, b) => a.s - b.s);
   words.mode = mode;
   words.loop = detectLoop(words);
+  words.duration = dur;
   return words;
 }
 
@@ -311,7 +370,7 @@ export function similar(a, b) {
  * @returns {words, lines, matched} — mots datés, débuts de ligne, et la
  *          part de paroles réellement retrouvées dans l'audio.
  */
-export function alignToLyrics(asrWords, lyricLines) {
+export function alignToLyrics(asrWords, lyricLines, duree) {
   // paroles à plat, en gardant l'appartenance à une ligne
   const lyr = [];
   lyricLines.forEach((line, li) =>
@@ -355,7 +414,7 @@ export function alignToLyrics(asrWords, lyricLines) {
 
   // Les trous : un mot que Whisper n'a pas entendu reçoit un instant
   // interpolé entre ses deux voisins datés, au prorata des syllabes.
-  fillGaps(lyr, asr);
+  fillGaps(lyr, asr, duree);
 
   // débuts de ligne
   const lines = [];
@@ -369,17 +428,24 @@ export function alignToLyrics(asrWords, lyricLines) {
   };
 }
 
-function fillGaps(lyr, asr) {
+function fillGaps(lyr, asr, duree) {
   const n = lyr.length;
   const firstT = asr.length ? asr[0].s : 0;
   const lastT = asr.length ? asr[asr.length - 1].e : 0;
+  // Rien ne doit être placé après la fin du morceau. Sans cette borne, une
+  // queue de paroles que Whisper n'a pas entendues s'étalait de 0,05 s en
+  // 0,05 s et finissait 20 secondes APRÈS le dernier son — mesuré sur le
+  // chant ASM : dernière ligne à 81,98 s pour un morceau de 62,23 s.
+  const FIN = (typeof duree === 'number' && duree > 0) ? duree : Math.max(lastT, 1);
   let i = 0;
   while (i < n) {
     if (typeof lyr[i].s === 'number') { i++; continue; }
     let j = i;
     while (j < n && typeof lyr[j].s !== 'number') j++;
     const before = i > 0 ? lyr[i - 1].e : firstT;
-    const after = j < n ? lyr[j].s : lastT;
+    // Une queue sans point d'appui va jusqu'à la fin du morceau, et s'y
+    // répartit — plutôt que de défiler à pas fixe et de déborder.
+    const after = j < n ? lyr[j].s : Math.max(before + 0.2, FIN);
     const span = Math.max(0.12 * (j - i), after - before);
     const step = span / (j - i);
     for (let k = i; k < j; k++) {
@@ -388,10 +454,18 @@ function fillGaps(lyr, asr) {
     }
     i = j;
   }
-  // ordre strictement croissant, quoi qu'il arrive
+  // ordre strictement croissant, quoi qu'il arrive — mais jamais au-delà
+  // de la fin : au pire on tasse les derniers mots contre elle.
   for (let k = 1; k < n; k++) {
     if (!(lyr[k].s > lyr[k - 1].s)) lyr[k].s = lyr[k - 1].s + 0.05;
     if (!(lyr[k].e > lyr[k].s)) lyr[k].e = lyr[k].s + 0.12;
+  }
+  for (let k = n - 1; k >= 0; k--) {
+    if (lyr[k].s > FIN) lyr[k].s = FIN;
+    if (k < n - 1 && lyr[k].s >= lyr[k + 1].s) lyr[k].s = lyr[k + 1].s - 0.02;
+    if (lyr[k].s < 0) lyr[k].s = 0;
+    if (!(lyr[k].e > lyr[k].s)) lyr[k].e = lyr[k].s + 0.12;
+    if (lyr[k].e > FIN) lyr[k].e = FIN;
   }
 }
 
@@ -408,7 +482,7 @@ export async function autoAlign(audioBuffer, lyricsText, opts = {}) {
     .map(l => l.trim()).filter(l => l.length)
     .map(l => l.split(/\s+/));
   const asr = await transcribe(audioBuffer, opts);
-  const r = alignToLyrics(asr, lines);
+  const r = alignToLyrics(asr, lines, audioBuffer.duration);
   return {
     audio: opts.name || 'chanson',
     duration: audioBuffer.duration,
