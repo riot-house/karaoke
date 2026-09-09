@@ -386,11 +386,22 @@
           <div class="row tight">
             <button class="btn small primary" id="autoAlign">Caler sur le son</button>
             <button class="btn small" id="asrAlign">Reconnaître les paroles</button>
+            <select id="asrModel" class="btn small" style="font-weight:500">
+              <option value="petit">Rapide · 41 Mo</option>
+              <option value="moyen" selected>Équilibré · 77 Mo</option>
+              <option value="grand">Précis · 248 Mo</option>
+            </select>
+            <label class="check" style="font-size:12px"><input type="checkbox" id="asrCentre" checked> Isoler le centre</label>
             <button class="btn small ghost" id="impJson">Importer le calage du plugin</button>
             <input type="file" id="jsonfile" accept=".json,application/json" hidden>
           </div>
           <div class="prog" id="asrprog" hidden><i id="asrbar"></i></div>
           <div class="report" id="asrstat"></div>
+          <details id="asrheard" hidden style="margin:-4px 0 0">
+            <summary style="font-size:12px;color:var(--muted);cursor:pointer">Ce que la machine a entendu</summary>
+            <p id="asrheardtxt" style="font-size:12px;color:var(--faint);line-height:1.55;
+               max-height:120px;overflow-y:auto;margin:8px 0 0"></p>
+          </details>
           <div class="lyrics" id="lylist"></div>
           <div class="row tight">
             <button class="btn small" id="nudgeL">◀ −0,1 s</button>
@@ -406,6 +417,13 @@
             Une ligne que vous recalez devient un <b>point fixe</b> (cerclé de jaune) :
             le moteur ne la déplace plus et réaligne tout ce qui suit derrière elle.
             Corriger la première ligne fausse, puis la suivante, converge vite.<br>
+            <b>Reconnaître les paroles</b> écoute le morceau et recolle vos paroles dessus.
+            Le pourcentage affiché est le seul juge utile : c'est la part de vos paroles
+            réellement retrouvées dans l'audio. Sous 55 %, montez d'un cran le modèle —
+            <b>Précis</b> est nettement meilleur sur du chant, au prix d'un téléchargement
+            unique de 248 Mo et d'une analyse trois fois plus longue. « Isoler le centre »
+            atténue ce qui est large en stéréo pour dégager la voix ; sans effet sur un
+            enregistrement mono.<br>
             Pour un morceau entier, <b>Caler au clavier</b> va plus vite que ligne à
             ligne : le calage démarre à la ligne sélectionnée, <kbd>Espace</kbd> marque
             chaque début, <kbd>⌫</kbd> annule la dernière frappe, et les boutons de
@@ -2447,7 +2465,9 @@ $("asrAlign").addEventListener("click", function(){
 
   import("./karaoke-asr.js").then(function(mod){
     return mod.autoAlign(A.buf, lyr, {
-      model: "moyen", language: "fr", name: A.name,
+      model: $("asrModel").value,
+      centre: $("asrCentre").checked,
+      language: "fr", name: A.name,
       onProgress: function(p){
         if (!p) return;
         if (p.status === "progress" && typeof p.progress === "number"){
@@ -2463,8 +2483,15 @@ $("asrAlign").addEventListener("click", function(){
     importPluginJSON(JSON.stringify(json));
     var pct = Math.round((json.matched || 0) * 100);
     setAlign("reconnaissance · " + json.words.length + " mots");
-    $("asrstat").innerHTML = pct + " % des paroles retrouvées dans l'audio."
-      + (pct < 55 ? " <b>Peu fiable</b> : vérifiez les lignes, ou passez par « Caler au clavier »." : "");
+    var verdict = pct >= 80 ? "Bon calage."
+                : pct >= 55 ? "Calage utilisable — vérifiez les lignes en orange."
+                : "<b>Peu fiable.</b> Essayez le modèle « Précis », ou passez par « Caler au clavier ».";
+    $("asrstat").innerHTML = "<b>" + pct + " %</b> de vos paroles retrouvées dans l'audio · "
+      + json.heardCount + " mots entendus. " + verdict;
+    if (json.heard){
+      $("asrheard").hidden = false;
+      $("asrheardtxt").textContent = json.heard;
+    }
     saveSoon();
     done();
   }).catch(function(e){
