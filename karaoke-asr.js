@@ -28,10 +28,14 @@
 // Les mêmes paliers que le panneau After Effects. Les tailles sont
 // celles des modèles quantifiés réellement téléchargés, une seule fois,
 // puis gardés en cache par le navigateur.
+// Le suffixe « _timestamped » n'est pas décoratif : ce sont les seules
+// variantes exportées avec les attentions croisées du décodeur. Sans
+// elles, Whisper transcrit mais ne peut PAS dater les mots — et c'est
+// exactement la datation qui nous intéresse.
 export const MODELS = {
-  petit: { id: 'onnx-community/whisper-tiny',  mo: 41,  nom: 'Rapide (tiny)' },
-  moyen: { id: 'onnx-community/whisper-base',  mo: 77,  nom: 'Équilibré (base)' },
-  grand: { id: 'onnx-community/whisper-small', mo: 248, nom: 'Précis (small)' }
+  petit: { id: 'onnx-community/whisper-tiny_timestamped',  mo: 41,  nom: 'Rapide (tiny)' },
+  moyen: { id: 'onnx-community/whisper-base_timestamped',  mo: 77,  nom: 'Équilibré (base)' },
+  grand: { id: 'onnx-community/whisper-small_timestamped', mo: 249, nom: 'Précis (small)' }
 };
 
 let _pipe = null, _pipeName = '';
@@ -65,21 +69,46 @@ export async function loadASR({ model = 'moyen', onProgress } = {}) {
 export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr', centre = false, onProgress } = {}) {
   const asr = await loadASR({ model, onProgress });
   const mono = toMono16k(audioBuffer, { centre });
-  const out = await asr(mono, {
-    language,
-    task: 'transcribe',
-    return_timestamps: 'word',
-    chunk_length_s: 30,
-    stride_length_s: 5
-  });
-  const chunks = out && out.chunks ? out.chunks : [];
+  // 29 et non 30 : à exactement 30, la datation des mots dégénère et
+  // tous les mots d'une tranche reçoivent le même instant (bug connu de
+  // transformers.js). Une seconde de moins suffit à l'éviter.
+  const COMMON = { language, task: 'transcribe', chunk_length_s: 29, stride_length_s: 5 };
+
+  let out, mode = 'word';
+  try {
+    out = await asr(mono, Object.assign({ return_timestamps: 'word' }, COMMON));
+  } catch (e) {
+    // Filet de sécurité : si la datation par mot n'est pas disponible
+    // (modèle sans attentions croisées), on retombe sur la datation par
+    // phrase. C'est moins fin, mais le recollage sur vos paroles s'en
+    // accommode — il vaut toujours mieux que rien.
+    mode = 'phrase';
+    out = await asr(mono, Object.assign({ return_timestamps: true }, COMMON));
+  }
+
+  const chunks = (out && out.chunks) ? out.chunks : [];
   const words = [];
   for (const c of chunks) {
     const t = (c.timestamp || [])[0], u = (c.timestamp || [])[1];
-    const w = String(c.text || '').trim();
-    if (!w || typeof t !== 'number') continue;
-    words.push({ w, s: t, e: (typeof u === 'number' && u > t) ? u : t + 0.25 });
+    const txt = String(c.text || '').trim();
+    if (!txt || typeof t !== 'number') continue;
+    const end = (typeof u === 'number' && u > t) ? u : t + 0.25;
+
+    if (mode === 'word') { words.push({ w: txt, s: t, e: end }); continue; }
+
+    // une phrase entière : on répartit sa durée sur ses mots, au prorata
+    // du nombre de lettres
+    const parts = txt.split(/\s+/).filter(Boolean);
+    if (!parts.length) continue;
+    const total = parts.reduce((a, w) => a + w.length, 0) || parts.length;
+    let cur = t;
+    for (const w of parts) {
+      const d = (end - t) * (w.length / total);
+      words.push({ w, s: cur, e: cur + d * 0.92 });
+      cur += d;
+    }
   }
+  words.mode = mode;
   return words;
 }
 
@@ -349,6 +378,7 @@ export async function autoAlign(audioBuffer, lyricsText, opts = {}) {
     matched: r.matched,
     heard: asr.map(x => x.w).join(' '),        // la transcription brute, pour diagnostic
     heardCount: asr.length,
+    timing: asr.mode || 'word',                // 'word' ou 'phrase' si repli
     words: r.words.map(w => ({
       w: w.w, s: Math.round(w.s * 1000) / 1000, e: Math.round(w.e * 1000) / 1000,
       line: w.line, lvl: 1
