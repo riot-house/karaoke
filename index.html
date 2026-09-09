@@ -492,7 +492,7 @@
               <option value="pt">Portugais</option>
               <option value="auto">Détecter</option>
             </select>
-            <label class="check" style="font-size:12px"><input type="checkbox" id="asrCentre" checked> Isoler le centre</label>
+            <label class="check" style="font-size:12px" title="À n'essayer que si la reconnaissance échoue : sur le chant ASM, cette option fait entendre de la musique au lieu des mots."><input type="checkbox" id="asrCentre"> Isoler le centre</label>
             <button class="btn small ghost" id="impJson">Importer le calage du plugin</button>
             <input type="file" id="jsonfile" accept=".json,application/json" hidden>
           </div>
@@ -2682,9 +2682,16 @@ $("asrAlign").addEventListener("click", function(){
           $("asrbar").style.width = "100%";
           $("asrstat").textContent = "Écoute du morceau…";
           modalStep("<b>La machine écoute votre morceau.</b><br>"
-            + "C'est l'étape longue : de quelques secondes à quelques minutes "
-            + "selon la durée du morceau et la puissance de l'ordinateur. "
             + "Rien ne part sur un serveur, tout se passe ici.", null);
+        } else if (p.status === "listening" && p.total){
+          // le morceau est écouté fenêtre par fenêtre : on sait donc
+          // vraiment où on en est
+          var v = Math.round(p.done / p.total * 100);
+          $("asrbar").style.width = v + "%";
+          $("asrstat").textContent = "Écoute : " + p.done + " / " + p.total;
+          modalStep("<b>La machine écoute votre morceau — passage "
+            + p.done + " sur " + p.total + ".</b><br>"
+            + "Rien ne part sur un serveur, tout se passe ici.", v);
         }
       }
     });
