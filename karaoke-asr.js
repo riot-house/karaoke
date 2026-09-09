@@ -67,12 +67,14 @@ export async function loadASR({ model = 'moyen', onProgress } = {}) {
  * Renvoie [{w, s, e}] — un mot, son début, sa fin, en secondes.
  */
 export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr', centre = false, onProgress } = {}) {
+  // language === 'auto' : on laisse Whisper décider (option simplement omise)
   const asr = await loadASR({ model, onProgress });
-  const mono = toMono16k(audioBuffer, { centre });
+  const mono = normalise(toMono16k(audioBuffer, { centre }));
   // 29 et non 30 : à exactement 30, la datation des mots dégénère et
   // tous les mots d'une tranche reçoivent le même instant (bug connu de
   // transformers.js). Une seconde de moins suffit à l'éviter.
-  const COMMON = { language, task: 'transcribe', chunk_length_s: 29, stride_length_s: 5 };
+  const COMMON = { task: 'transcribe', chunk_length_s: 29, stride_length_s: 5 };
+  if (language && language !== 'auto') COMMON.language = language;
 
   let out, mode = 'word';
   try {
@@ -109,7 +111,30 @@ export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr'
     }
   }
   words.mode = mode;
+  words.loop = detectLoop(words);
   return words;
+}
+
+/**
+ * Whisper, mis en difficulté, se met à répéter indéfiniment la même
+ * séquence de mots. C'est reconnaissable : on compte la part des mots
+ * qui appartiennent à un motif déjà vu. Au-delà de la moitié, la
+ * transcription ne vaut rien — et il vaut mieux le dire que laisser
+ * l'utilisateur croire à un problème de calage.
+ */
+export function detectLoop(words) {
+  if (words.length < 40) return 0;
+  const seq = words.map(w => w.w);
+  const seen = new Map();
+  let repeated = 0;
+  const K = 6;                                   // motifs de six mots
+  for (let i = 0; i + K <= seq.length; i++) {
+    const key = seq.slice(i, i + K).join(' ');
+    const n = (seen.get(key) || 0) + 1;
+    seen.set(key, n);
+    if (n > 1) repeated++;
+  }
+  return repeated / Math.max(1, seq.length - K + 1);
 }
 
 /**
@@ -162,6 +187,20 @@ export function centreEmphasis(L, R, { strength = 2 } = {}) {
   }
   for (let i = 0; i < n; i++) if (norm[i] > 1e-6) out[i] /= norm[i];
   return out;
+}
+
+/**
+ * Remise à niveau. Un signal trop faible est une cause connue de
+ * divagation : Whisper prend le quasi-silence pour de la parole et part
+ * en boucle. On ramène donc la crête à 0,9 avant de lui donner l'audio.
+ */
+export function normalise(x) {
+  let peak = 0;
+  for (let i = 0; i < x.length; i++) { const v = Math.abs(x[i]); if (v > peak) peak = v; }
+  if (!(peak > 1e-6) || peak > 0.85) return x;      // déjà correct, ou muet
+  const g = 0.9 / peak;
+  for (let i = 0; i < x.length; i++) x[i] *= g;
+  return x;
 }
 
 /** Whisper attend du mono à 16 kHz. */
@@ -379,6 +418,7 @@ export async function autoAlign(audioBuffer, lyricsText, opts = {}) {
     heard: asr.map(x => x.w).join(' '),        // la transcription brute, pour diagnostic
     heardCount: asr.length,
     timing: asr.mode || 'word',                // 'word' ou 'phrase' si repli
+    loop: asr.loop || 0,                       // part de la transcription en boucle
     words: r.words.map(w => ({
       w: w.w, s: Math.round(w.s * 1000) / 1000, e: Math.round(w.e * 1000) / 1000,
       line: w.line, lvl: 1
