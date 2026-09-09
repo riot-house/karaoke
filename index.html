@@ -283,6 +283,45 @@
   .prog.on{display:block;}
   .prog i{display:block;height:100%;width:0;background:var(--yellow);transition:width .15s linear;}
 
+  /* ---------- fenêtre d'analyse ----------
+     Une reconnaissance peut durer plusieurs minutes. Tant que rien ne
+     bouge à l'écran, on ne sait pas si la page travaille ou si elle a
+     planté. Cette fenêtre dit « je travaille », puis « c'est prêt », et
+     ne se referme qu'à la main, à ce moment-là. */
+  .modal{position:fixed;inset:0;z-index:70;background:rgba(6,8,12,.86);
+    -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
+    display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;}
+  .modal[hidden]{display:none;}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 26px 74px rgba(0,0,0,.62);max-width:560px;width:100%;padding:26px 26px 22px;}
+  .mtag{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);margin:0 0 16px;}
+  .mhead{display:flex;align-items:center;gap:15px;margin:0 0 18px;}
+  .mball{width:38px;height:38px;flex:none;}
+  .mball img{width:100%;height:100%;display:block;animation:hop .76s ease-in-out infinite;}
+  .modal.done .mball img{animation:none;}
+  .mtitle{font-family:'Anton',Impact,sans-serif;font-weight:400;text-transform:uppercase;
+    letter-spacing:.01em;font-size:clamp(24px,4.6vw,30px);line-height:1.1;margin:0;color:var(--text);}
+  .modal.done .mtitle{color:var(--yellow);}
+  .modal.bad .mtitle{color:var(--warn);}
+  .mbox .prog{display:block;margin:0 0 15px;}
+  .mbox .prog.wait i{width:34%;animation:sweep 1.3s ease-in-out infinite;transition:none;}
+  @keyframes sweep{0%{margin-left:-34%}100%{margin-left:100%}}
+  .mstat{font-size:13.5px;line-height:1.62;color:var(--muted);margin:0;}
+  .mstat b{color:var(--text);}
+  .mstat i{color:var(--faint);}
+  .mheard{margin-top:15px;}
+  .mheard summary{font-size:12px;color:var(--muted);cursor:pointer;}
+  .mheard p{font-size:12px;color:var(--faint);line-height:1.55;
+    max-height:140px;overflow-y:auto;margin:9px 0 0;}
+  .mfoot{display:flex;align-items:center;gap:12px;margin-top:22px;}
+  .mwait{font-size:12px;color:var(--faint);margin-right:auto;}
+  .mfoot .btn{margin-left:auto;}
+  @media (prefers-reduced-motion: reduce){
+    .mball img{animation:none;}
+    .mbox .prog.wait i{animation:none;width:100%;}
+  }
+
   .note{background:var(--panel-2);border-left:2px solid var(--yellow);padding:10px 12px;
     border-radius:0 6px 6px 0;font-size:12px;color:var(--muted);line-height:1.55;}
   .note b{color:var(--text);}
@@ -337,6 +376,27 @@
       dessus, le bouton <b>Reprendre mon travail</b> apparaît ci-dessus. Vous retrouverez
       cette page à tout moment par la pastille <b>Accueil</b>, en haut.
     </p>
+  </div>
+</section>
+
+<section class="modal" id="asrmodal" role="dialog" aria-modal="true"
+         aria-labelledby="amtitle" aria-describedby="amstat" hidden>
+  <div class="mbox">
+    <p class="mtag" id="amtag">Reconnaissance des paroles</p>
+    <div class="mhead">
+      <span class="mball" id="amball"><img alt=""></span>
+      <h2 class="mtitle" id="amtitle">La machine écoute…</h2>
+    </div>
+    <div class="prog wait" id="amprog"><i id="ambar"></i></div>
+    <p class="mstat" id="amstat"></p>
+    <details class="mheard" id="amheard" hidden>
+      <summary>Ce que la machine a entendu</summary>
+      <p id="amheardtxt"></p>
+    </details>
+    <div class="mfoot">
+      <span class="mwait" id="amwait">Laissez cet onglet ouvert, ça travaille · <b id="amtime">0 s</b></span>
+      <button class="btn primary" id="amclose" hidden>Fermer</button>
+    </div>
   </div>
 </section>
 
@@ -436,7 +496,7 @@
             <button class="btn small ghost" id="impJson">Importer le calage du plugin</button>
             <input type="file" id="jsonfile" accept=".json,application/json" hidden>
           </div>
-          <div class="prog" id="asrprog" hidden><i id="asrbar"></i></div>
+          <div class="prog" id="asrprog"><i id="asrbar"></i></div>
           <div class="report" id="asrstat"></div>
           <details id="asrheard" hidden style="margin:-4px 0 0">
             <summary style="font-size:12px;color:var(--muted);cursor:pointer">Ce que la machine a entendu</summary>
@@ -2490,6 +2550,93 @@ $("forget").addEventListener("click", forgetSaved);
 // modèle ne se chargent qu'au premier clic : la page reste légère pour
 // qui ne s'en sert pas.
 var asrBusy = false;
+
+/* ---------- la fenêtre d'analyse ----------
+   Elle s'ouvre au lancement, reste ouverte tant que ça travaille, et
+   n'offre son bouton de fermeture qu'une fois le résultat affiché. */
+var mWorking = false, mTimer = null, mT0 = 0;
+
+// Un compteur qui avance : c'est le signe le plus simple que la page
+// n'est pas figée.
+function mTick(){
+  var d = Math.round((Date.now() - mT0) / 1000);
+  $("amtime").textContent = d < 60
+    ? d + " s"
+    : Math.floor(d/60) + " min " + (d % 60) + " s";
+}
+
+function modalOpen(tag, title){
+  var m = $("asrmodal");
+  m.className = "modal";
+  $("amtag").textContent = tag;
+  $("amtitle").textContent = title;
+  $("amstat").innerHTML = "";
+  $("amheard").hidden = true;
+  $("amheard").open = false;
+  $("amclose").hidden = true;
+  $("amwait").hidden = false;
+  var img = $("amball").querySelector("img");
+  if (!img.getAttribute("src")) img.src = BALL_IMG_SRC;
+  m.hidden = false;
+  mWorking = true;
+  modalStep("", null);
+  mT0 = Date.now();
+  $("amtime").textContent = "0 s";
+  if (mTimer) clearInterval(mTimer);
+  mTimer = setInterval(mTick, 1000);
+}
+
+// pct = un nombre pour une vraie proportion connue, null pour « ça
+// travaille, on ne sait pas combien de temps » (barre qui balaie).
+function modalStep(html, pct){
+  $("amstat").innerHTML = html;
+  if (typeof pct === "number"){
+    $("amprog").className = "prog";
+    $("ambar").style.width = Math.max(0, Math.min(100, pct)) + "%";
+  } else {
+    $("amprog").className = "prog wait";
+    $("ambar").style.width = "";
+  }
+}
+
+function modalDone(o){
+  var m = $("asrmodal");
+  m.className = "modal done" + (o.bad ? " bad" : "");
+  $("amtitle").textContent = o.title;
+  $("amprog").className = "prog";
+  $("ambar").style.width = "100%";
+  $("amwait").hidden = true;
+  var secs = Math.round((Date.now() - mT0) / 1000);
+  $("amclose").textContent = o.btn || "Fermer";
+  o.html += "<br><i>Analyse faite en " + (secs < 60
+    ? secs + " s"
+    : Math.floor(secs/60) + " min " + (secs % 60) + " s") + ".</i>";
+  $("amstat").innerHTML = o.html;
+  $("amclose").hidden = false;
+  if (o.heard){
+    $("amheard").hidden = false;
+    $("amheard").open = !!o.bad;
+    $("amheardtxt").textContent = o.heard;
+  }
+  if (mTimer){ clearInterval(mTimer); mTimer = null; }
+  mWorking = false;
+  try { $("amclose").focus(); } catch (e){}
+}
+
+function modalClose(){
+  if (mWorking) return;                    // pas de sortie pendant le travail
+  $("asrmodal").hidden = true;
+}
+
+$("amclose").addEventListener("click", modalClose);
+// Tant que la fenêtre est là, elle prend le clavier : sinon Espace
+// relancerait la lecture derrière, sans qu'on le voie.
+document.addEventListener("keydown", function(e){
+  if ($("asrmodal").hidden) return;
+  if (e.key === "Escape" && !mWorking) modalClose();
+  e.stopPropagation();
+}, true);
+
 $("asrAlign").addEventListener("click", function(){
   if (asrBusy) return;
   if (!A.buf){ $("asrstat").textContent = "Chargez d'abord un morceau."; return; }
@@ -2503,13 +2650,17 @@ $("asrAlign").addEventListener("click", function(){
   if (!lyr){ $("asrstat").textContent = "Collez d'abord les paroles : ce sont elles qui font foi."; return; }
   asrBusy = true;
   $("asrAlign").disabled = true;
-  $("asrprog").hidden = false;
-  $("asrstat").textContent = "Chargement du modèle (une seule fois, puis gardé en cache)…";
+  $("asrprog").classList.add("on");
+  var first = "Chargement du modèle&nbsp;: il ne se télécharge qu'une fois, "
+            + "puis votre navigateur le garde.";
+  $("asrstat").innerHTML = first;
+  modalOpen("Reconnaissance des paroles", "Ça travaille…");
+  modalStep(first, null);
 
   var done = function(){
     asrBusy = false;
     $("asrAlign").disabled = false;
-    setTimeout(function(){ $("asrprog").hidden = true; $("asrbar").style.width = "0%"; }, 900);
+    setTimeout(function(){ $("asrprog").classList.remove("on"); $("asrbar").style.width = "0%"; }, 900);
   };
 
   import("./karaoke-asr.js").then(function(mod){
@@ -2521,11 +2672,19 @@ $("asrAlign").addEventListener("click", function(){
       onProgress: function(p){
         if (!p) return;
         if (p.status === "progress" && typeof p.progress === "number"){
-          $("asrbar").style.width = Math.round(p.progress) + "%";
-          $("asrstat").textContent = "Téléchargement du modèle : " + Math.round(p.progress) + " %";
+          var v = Math.round(p.progress);
+          $("asrbar").style.width = v + "%";
+          $("asrstat").textContent = "Téléchargement du modèle : " + v + " %";
+          modalStep("<b>Téléchargement du modèle : " + v + "&nbsp;%</b><br>"
+            + "Ce n'est à faire qu'une fois : la prochaine analyse démarrera "
+            + "directement.", v);
         } else if (p.status === "ready"){
           $("asrbar").style.width = "100%";
           $("asrstat").textContent = "Écoute du morceau…";
+          modalStep("<b>La machine écoute votre morceau.</b><br>"
+            + "C'est l'étape longue : de quelques secondes à quelques minutes "
+            + "selon la durée du morceau et la puissance de l'ordinateur. "
+            + "Rien ne part sur un serveur, tout se passe ici.", null);
         }
       }
     });
@@ -2533,11 +2692,13 @@ $("asrAlign").addEventListener("click", function(){
     var pct = Math.round((json.matched || 0) * 100);
     if (!json.heardCount){
       setAlign("la reconnaissance n'a rien entendu");
-      $("asrstat").innerHTML = "<b>La machine n'a entendu aucun mot.</b> Ce n'est pas le "
+      var h0 = "<b>La machine n'a entendu aucun mot.</b> Ce n'est pas le "
         + "recollage qui a échoué, c'est l'écoute. À essayer dans l'ordre : décocher "
         + "« Isoler le centre », puis passer au modèle <b>Précis</b>. Si le morceau est "
         + "très couvert ou très court, le calage au clavier reste la voie sûre.";
+      $("asrstat").innerHTML = h0;
       $("asrheard").hidden = true;
+      modalDone({ title: "Rien entendu", html: h0, bad: true });
       done(); return;
     }
     // Une transcription en boucle, ou qui ne retrouve presque rien, ne
@@ -2546,7 +2707,7 @@ $("asrAlign").addEventListener("click", function(){
     var loop = Math.round((json.loop || 0) * 100);
     if (loop >= 50 || pct < 15){
       setAlign("reconnaissance refusée");
-      $("asrstat").innerHTML = (loop >= 50
+      var h1 = (loop >= 50
           ? "<b>La machine s'est mise à radoter</b> : " + loop + " % de ce qu'elle a écrit "
             + "n'est que la même séquence répétée. C'est son comportement quand elle ne "
             + "comprend pas ce qu'elle entend."
@@ -2555,9 +2716,11 @@ $("asrAlign").addEventListener("click", function(){
         + "vérifier la <b>langue</b> ci-dessus, décocher <b>Isoler le centre</b>, "
         + "puis passer au modèle <b>Précis</b>. Sur un morceau très instrumenté, "
         + "« Caler au clavier » reste la voie sûre.";
+      $("asrstat").innerHTML = h1;
       $("asrheard").hidden = false;
       $("asrheard").open = true;
       $("asrheardtxt").textContent = json.heard;
+      modalDone({ title: "Calage refusé", html: h1, bad: true, heard: json.heard });
       done(); return;
     }
     importPluginJSON(JSON.stringify(json));
@@ -2567,18 +2730,31 @@ $("asrAlign").addEventListener("click", function(){
                 : "<b>Peu fiable.</b> Essayez le modèle « Précis », ou passez par « Caler au clavier ».";
     var fin = (json.timing === "phrase")
       ? " <i>Datation par phrase seulement (repli) : le calage sera moins fin.</i>" : "";
-    $("asrstat").innerHTML = "<b>" + pct + " %</b> de vos paroles retrouvées dans l'audio · "
+    var h2 = "<b>" + pct + " %</b> de vos paroles retrouvées dans l'audio · "
       + json.heardCount + " mots entendus. " + verdict + fin;
+    $("asrstat").innerHTML = h2;
     if (json.heard){
       $("asrheard").hidden = false;
       $("asrheard").open = (pct < 55);          // ça se passe mal : on montre d'emblée
       $("asrheardtxt").textContent = json.heard;
     }
+    modalDone({
+      title: "C'est prêt !",
+      html: "Vos " + json.words.length + " mots sont posés sur le chant.<br>" + h2,
+      bad: (pct < 55),
+      heard: json.heard,
+      btn: "Voir le calage"
+    });
     saveSoon();
     done();
   }).catch(function(e){
-    $("asrstat").textContent = "Reconnaissance indisponible : "
-      + (e && e.message ? e.message : e) + " — le calage au clavier reste disponible.";
+    // le message vient d'une bibliothèque tierce : on le neutralise
+    var msg = String(e && e.message ? e.message : e)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    var h3 = "<b>Reconnaissance indisponible :</b> " + msg
+      + " — le calage au clavier reste disponible.";
+    $("asrstat").innerHTML = h3;
+    modalDone({ title: "Analyse impossible", html: h3, bad: true });
     done();
   });
 });
