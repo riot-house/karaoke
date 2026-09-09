@@ -113,21 +113,68 @@ export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr'
   let mode = 'word';
   const words = [];
 
-  for (let k = 0; k < debuts.length; k++) {
-    const d0 = debuts[k];
-    const tranche = mono.slice(Math.round(d0 * SR), Math.round(Math.min(dur, d0 + FEN) * SR));
-    if (tranche.length < SR * 0.5) continue;
+  // Une fenêtre qui radote se soigne, ou se met de côté — elle ne
+  // contamine plus tout le morceau.
+  //
+  // Whisper, sur un passage qu'il ne comprend pas, se met à répéter la
+  // même poignée de mots jusqu'à épuiser son quota de jetons. Constaté
+  // sur « Pour que tu m'aimes encore » : les neuf fenêtres rendaient
+  // toutes la même bouillie, et l'analyse durait 4 min 56 s au lieu de
+  // 35 s — la lenteur EST le symptôme, un décodeur qui boucle écrit le
+  // maximum de jetons à chaque fois.
+  //
+  // Trois échelons, du moins intrusif au plus brutal :
+  //   1. écoute normale ;
+  //   2. si ça radote, on réécoute la MÊME fenêtre en interdisant à la
+  //      machine de répéter trois mots d'affilée ;
+  //   3. si ça radote encore, on jette cette fenêtre. Ses paroles seront
+  //      replacées par interpolation entre les fenêtres voisines, ce qui
+  //      vaut infiniment mieux qu'un calage faux.
+  let ignorees = 0;
 
+  const ecoute = async (tranche, extra) => {
     let out;
     try {
-      out = await asr(tranche, Object.assign({ return_timestamps: 'word' }, COMMON));
+      out = await asr(tranche, Object.assign({ return_timestamps: 'word' }, COMMON, extra));
     } catch (e) {
       // Filet de sécurité : si la datation par mot n'est pas disponible
       // (modèle sans attentions croisées), on retombe sur la datation par
       // phrase. C'est moins fin, mais le recollage sur vos paroles s'en
       // accommode — il vaut toujours mieux que rien.
       mode = 'phrase';
-      out = await asr(tranche, Object.assign({ return_timestamps: true }, COMMON));
+      out = await asr(tranche, Object.assign({ return_timestamps: true }, COMMON, extra));
+    }
+    return (out && out.chunks) ? out.chunks : [];
+  };
+
+  // Deux signes, et le second est délibérément dur à déclencher.
+  //
+  // Attention au faux positif : une chanson RÉPÈTE. « Pour que tu m'aimes
+  // encore » huit fois de suite marque 86 % de répétition — un refrain
+  // parfaitement légitime que l'on n'a aucune raison de jeter. On exige
+  // donc, en plus d'un taux très élevé, un nombre de mots qu'un refrain
+  // ne peut pas atteindre dans une fenêtre de 28 secondes.
+  const radote = (chunks, secondes) => {
+    const mots = chunks.map(c => String(c.text || '').trim()).filter(Boolean);
+    // Le signe sûr, parce que physique : on ne chante pas plus de quatre
+    // mots et demi par seconde. Au-delà, ce n'est plus du chant
+    // transcrit, c'est un décodeur emballé.
+    if (mots.length > Math.max(30, secondes * 4.5)) return true;
+    // Le second signe ne sert qu'aux boucles plus lentes, et ne se
+    // déclenche pas sous 80 mots — treize fois le refrain ci-dessus.
+    return mots.length >= 80 && detectLoop(mots.map(w => ({ w: w }))) >= 0.75;
+  };
+
+  for (let k = 0; k < debuts.length; k++) {
+    const d0 = debuts[k];
+    const tranche = mono.slice(Math.round(d0 * SR), Math.round(Math.min(dur, d0 + FEN) * SR));
+    if (tranche.length < SR * 0.5) continue;
+    const secondes = tranche.length / SR;
+
+    let chunks = await ecoute(tranche, null);
+    if (radote(chunks, secondes)) {
+      chunks = await ecoute(tranche, { no_repeat_ngram_size: 3, repetition_penalty: 1.15 });
+      if (radote(chunks, secondes)) { ignorees++; chunks = []; }
     }
 
     // On coupe le recouvrement en deux : la première moitié appartient à
@@ -136,7 +183,7 @@ export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr'
     const planche = (k === 0) ? -1 : d0 + RECOUV / 2;
     const plafond = (k === debuts.length - 1) ? dur + 1 : d0 + FEN - RECOUV / 2;
 
-    for (const c of ((out && out.chunks) ? out.chunks : [])) {
+    for (const c of chunks) {
       const t = (c.timestamp || [])[0], u = (c.timestamp || [])[1];
       const txt = String(c.text || '').trim();
       if (!txt || typeof t !== 'number') continue;
@@ -171,6 +218,8 @@ export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr'
   words.mode = mode;
   words.loop = detectLoop(words);
   words.duration = dur;
+  words.fenetres = debuts.length;
+  words.ignorees = ignorees;
   return words;
 }
 
@@ -493,6 +542,8 @@ export async function autoAlign(audioBuffer, lyricsText, opts = {}) {
     heardCount: asr.length,
     timing: asr.mode || 'word',                // 'word' ou 'phrase' si repli
     loop: asr.loop || 0,                       // part de la transcription en boucle
+    fenetres: asr.fenetres || 0,               // passages de 28 s écoutés
+    ignorees: asr.ignorees || 0,               // passages mis de côté parce qu'ils radotaient
     words: r.words.map(w => ({
       w: w.w, s: Math.round(w.s * 1000) / 1000, e: Math.round(w.e * 1000) / 1000,
       line: w.line, lvl: 1
