@@ -15,7 +15,9 @@
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
-<title>Studio Karaoké</title>\n</head>\n<body>\n<title>Studio Karaoké</title>
+<title>Studio Karaoké</title>
+</head>
+<body>
 <!-- feuille de polices chargée sans bloquer l'affichage : une police
      lente ou injoignable ne doit pas retarder le démarrage -->
 <link rel="stylesheet" media="print" onload="this.media='all'"
@@ -122,9 +124,36 @@
   .wgo{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:26px 0 0;}
   .wnote{font-size:12px;color:var(--faint);line-height:1.6;margin:20px 0 0;max-width:62ch;}
 
-  /* ---------- disposition ---------- */
-  .main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start;}
-  @media (max-width:960px){.main{grid-template-columns:1fr;}}
+  /* ---------- disposition ----------
+     La colonne de droite s'élargit avec l'écran : sur un grand moniteur,
+     les paroles et les réglages respirent au lieu de rester coincés dans
+     360 px. Le moniteur, lui, reste COLLÉ EN HAUT : on continue de voir
+     le résultat pendant qu'on descend dans les étapes — c'est tout
+     l'intérêt d'un outil de montage. */
+  .app{max-width:1720px;}
+  .main{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) clamp(380px, 32vw, 560px);
+    gap:20px;align-items:start;
+  }
+  .stage-col{position:sticky;top:14px;}
+  @media (max-width:1100px){
+    .main{grid-template-columns:minmax(0,1fr) 380px;gap:16px;}
+  }
+  @media (max-width:920px){
+    .main{grid-template-columns:1fr;}
+    .stage-col{position:static;}          /* empilé : plus rien à coller */
+  }
+  @media (max-width:560px){
+    .app{padding:14px 12px 48px;}
+    .top{gap:10px;}
+    .brand h1{font-size:19px;}
+    .brand .tag{display:none;}
+    .tline{flex-wrap:wrap;gap:8px;}
+    .btn{padding:8px 12px;}
+    .btn.small{padding:6px 9px;font-size:12px;}
+    .lyrics{max-height:none;}
+  }
 
   /* ---------- moniteur ---------- */
   .monitor{
@@ -202,7 +231,7 @@
   .check input{accent-color:var(--yellow);width:15px;height:15px;}
 
   /* ---------- lignes de paroles ---------- */
-  .lyrics{display:flex;flex-direction:column;gap:1px;max-height:230px;overflow-y:auto;
+  .lyrics{display:flex;flex-direction:column;gap:1px;max-height:min(46vh,420px);overflow-y:auto;
     background:var(--sunk);border:1px solid var(--line-2);border-radius:8px;padding:4px;}
   .ly{
     display:grid;grid-template-columns:26px 8px 1fr auto;gap:9px;align-items:baseline;
@@ -300,10 +329,13 @@
     <div class="wgo">
       <button class="btn primary" id="wstart">Ouvrir le studio</button>
       <button class="btn ghost" id="wdemo">Écouter la démo</button>
+      <button class="btn" id="wresume" hidden>Reprendre mon travail</button>
     </div>
     <p class="wnote">
       Un chant est déjà chargé pour que vous voyiez tout de suite ce que ça donne.
-      Vous retrouverez cette page à tout moment par la pastille <b>Accueil</b>, en haut.
+      Le studio repart de ce chant à chaque visite ; si vous aviez commencé un travail
+      dessus, le bouton <b>Reprendre mon travail</b> apparaît ci-dessus. Vous retrouverez
+      cette page à tout moment par la pastille <b>Accueil</b>, en haut.
     </p>
   </div>
 </section>
@@ -326,7 +358,7 @@
 
   <div class="main">
 
-    <div>
+    <div class="stage-col">
       <div class="monitor">
         <span class="badge169">1920 × 1080 · 16:9</span>
         <canvas id="stage" width="1280" height="720"></canvas>
@@ -2450,7 +2482,13 @@ var asrBusy = false;
 $("asrAlign").addEventListener("click", function(){
   if (asrBusy) return;
   if (!A.buf){ $("asrstat").textContent = "Chargez d'abord un morceau."; return; }
-  var lyr = $("raw").value.replace(/^\s+|\s+$/g, "");
+  // on transmet les paroles NETTOYÉES, celles que la page affiche —
+  // pas le collage brut avec ses en-têtes et ses crédits
+  var clean = [];
+  for (var li=0; li<A.lines.length; li++){
+    if (!A.lines[li].pause && A.lines[li].text) clean.push(A.lines[li].text);
+  }
+  var lyr = clean.join("\n");
   if (!lyr){ $("asrstat").textContent = "Collez d'abord les paroles : ce sont elles qui font foi."; return; }
   asrBusy = true;
   $("asrAlign").disabled = true;
@@ -2482,6 +2520,15 @@ $("asrAlign").addEventListener("click", function(){
   }).then(function(json){
     importPluginJSON(JSON.stringify(json));
     var pct = Math.round((json.matched || 0) * 100);
+    if (!json.heardCount){
+      setAlign("la reconnaissance n'a rien entendu");
+      $("asrstat").innerHTML = "<b>La machine n'a entendu aucun mot.</b> Ce n'est pas le "
+        + "recollage qui a échoué, c'est l'écoute. À essayer dans l'ordre : décocher "
+        + "« Isoler le centre », puis passer au modèle <b>Précis</b>. Si le morceau est "
+        + "très couvert ou très court, le calage au clavier reste la voie sûre.";
+      $("asrheard").hidden = true;
+      done(); return;
+    }
     setAlign("reconnaissance · " + json.words.length + " mots");
     var verdict = pct >= 80 ? "Bon calage."
                 : pct >= 55 ? "Calage utilisable — vérifiez les lignes en orange."
@@ -2492,6 +2539,7 @@ $("asrAlign").addEventListener("click", function(){
       + json.heardCount + " mots entendus. " + verdict + fin;
     if (json.heard){
       $("asrheard").hidden = false;
+      $("asrheard").open = (pct < 55);          // ça se passe mal : on montre d'emblée
       $("asrheardtxt").textContent = json.heard;
     }
     saveSoon();
@@ -2635,7 +2683,6 @@ function closeWelcome(){
   if (wTimer){ clearInterval(wTimer); wTimer = null; }
   markStep("card-source");
   saveSoon();
-  A.seenWelcome = true;
 }
 
 function startTitleBall(){
@@ -2670,6 +2717,10 @@ function startTitleBall(){
 }
 
 $("wstart").addEventListener("click", closeWelcome);
+$("wresume").addEventListener("click", function(){
+  resumeWork();
+  closeWelcome();
+});
 $("wdemo").addEventListener("click", function(){
   closeWelcome();
   A.off = 3.6;
@@ -2720,7 +2771,6 @@ function snapshotState(){
   return {
     v: 1,
     audio: A.name || "",
-    seen: !!A.seenWelcome,
     raw: $("raw").value,
     lines: lines,
     style: { ball:S.ball, ballStyle:S.ballStyle, dyn:S.dyn, dynScope:S.dynScope,
@@ -2747,6 +2797,15 @@ function saveSoon(){
   }, 900);
 }
 
+// La mémoire ne se réapplique plus toute seule. Elle rendait les paroles
+// d'un morceau par-dessus l'audio d'un autre — un état incohérent, et
+// impossible à comprendre pour qui revient sur le site. Désormais :
+//   · les préférences d'apparence reviennent toujours (sans risque) ;
+//   · le TRAVAIL (paroles, calage, épingles) n'est proposé que s'il
+//     concerne le morceau effectivement chargé, et seulement si vous le
+//     demandez depuis l'accueil.
+var SAVED = null;
+
 function restoreSaved(){
   if (!MEM || restored || !A.lines.length) return;
   restored = true;
@@ -2754,28 +2813,49 @@ function restoreSaved(){
   var d = null;
   try { d = JSON.parse(localStorage.getItem(MEMKEY) || "null"); } catch (e){ d = null; }
   if (!d || d.v !== 1) return;
+  SAVED = d;
   try {
-    if (d.seen){
-      A.seenWelcome = true; $("welcome").hidden = true;
-      if (wTimer){ clearInterval(wTimer); wTimer = null; }
-      markStep("card-source");
-    }
     if (d.style){
       var k;
       for (k in d.style) if (S[k] !== undefined && d.style[k] !== undefined) S[k] = d.style[k];
       syncStyleUI();
     }
-    if (typeof d.raw === "string" && d.raw !== $("raw").value){
-      $("raw").value = d.raw;
-      applyLyrics(d.raw);
+  } catch (e){}
+  offerResume();
+}
+
+function sameSong(){
+  return !!(SAVED && SAVED.audio && A.name && SAVED.audio === A.name);
+}
+
+function offerResume(){
+  var b = $("wresume");
+  if (!b) return;
+  if (sameSong() && SAVED.lines && SAVED.lines.length){
+    var when = "";
+    try {
+      var dt = new Date(SAVED.at);
+      if (!isNaN(dt)) when = " · " + dt.toLocaleDateString("fr-FR", {day:"numeric", month:"short"});
+    } catch (e){}
+    b.textContent = "Reprendre mon travail" + when;
+    b.hidden = false;
+  } else b.hidden = true;
+}
+
+function resumeWork(){
+  if (!sameSong() || !SAVED.lines) return;
+  try {
+    if (typeof SAVED.raw === "string"){
+      $("raw").value = SAVED.raw;
+      applyLyrics(SAVED.raw);
     }
-    if (d.lines && d.lines.length === A.lines.length){
+    if (SAVED.lines.length === A.lines.length){
       for (var i=0;i<A.lines.length;i++){
-        if (typeof d.lines[i].s === "number") A.lines[i].start = d.lines[i].s;
-        A.lines[i].pin = !!d.lines[i].p;
+        if (typeof SAVED.lines[i].s === "number") A.lines[i].start = SAVED.lines[i].s;
+        A.lines[i].pin = !!SAVED.lines[i].p;
       }
       rebuildWords(); renderList();
-      setAlign("calage repris de la dernière visite");
+      setAlign("calage repris de votre dernière visite");
     }
   } catch (e){}
 }
@@ -2879,4 +2959,6 @@ window.__ka = {
 
 })();
 </script>
-\n</body>\n</html>\n
+
+</body>
+</html>
