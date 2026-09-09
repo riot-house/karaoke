@@ -2712,17 +2712,25 @@ $("asrAlign").addEventListener("click", function(){
     // vaut rien — et l'appliquer DÉTRUIRAIT le calage en place. On la
     // refuse et on explique, plutôt que d'écraser du bon par du faux.
     var loop = Math.round((json.loop || 0) * 100);
-    if (loop >= 50 || pct < 15){
+    var fen = json.fenetres || 0, ign = json.ignorees || 0;
+    var perdu = fen ? Math.round(ign / fen * 100) : 0;
+    // Un passage écarté n'est pas un échec : ses paroles sont replacées
+    // entre les voisines. C'est la proportion qui décide.
+    if (loop >= 50 || pct < 15 || perdu >= 60){
       setAlign("reconnaissance refusée");
-      var h1 = (loop >= 50
+      var h1 = (perdu >= 60
+          ? "<b>La machine n'a rien compris à " + ign + " passage" + (ign > 1 ? "s" : "")
+            + " sur " + fen + ".</b> Elle s'y est mise à répéter la même poignée de mots — "
+            + "son comportement quand la voix est noyée dans l'instrumental."
+          : loop >= 50
           ? "<b>La machine s'est mise à radoter</b> : " + loop + " % de ce qu'elle a écrit "
             + "n'est que la même séquence répétée. C'est son comportement quand elle ne "
             + "comprend pas ce qu'elle entend."
           : "<b>Presque rien retrouvé</b> (" + pct + " %).")
-        + " <b>Votre calage n'a pas été touché.</b> À essayer, dans cet ordre : "
-        + "vérifier la <b>langue</b> ci-dessus, décocher <b>Isoler le centre</b>, "
-        + "puis passer au modèle <b>Précis</b>. Sur un morceau très instrumenté, "
-        + "« Caler au clavier » reste la voie sûre.";
+        + " <b>Votre calage n'a pas été touché.</b> Le levier le plus efficace, et de loin, "
+        + "est le modèle <b>Précis</b> : un modèle plus grand se met beaucoup moins à radoter. "
+        + "Vérifiez aussi la <b>langue</b> ci-dessus. Sur une production dense — batterie, "
+        + "guitares, chœurs — « Caler au clavier » reste la voie sûre : 68 frappes, une écoute.";
       $("asrstat").innerHTML = h1;
       $("asrheard").hidden = false;
       $("asrheard").open = true;
@@ -2737,8 +2745,14 @@ $("asrAlign").addEventListener("click", function(){
                 : "<b>Peu fiable.</b> Essayez le modèle « Précis », ou passez par « Caler au clavier ».";
     var fin = (json.timing === "phrase")
       ? " <i>Datation par phrase seulement (repli) : le calage sera moins fin.</i>" : "";
+    var ecart = (json.ignorees > 0)
+      ? " " + json.ignorees + " passage" + (json.ignorees > 1 ? "s" : "") + " sur "
+        + json.fenetres + " " + (json.ignorees > 1 ? "ont" : "a")
+        + " été écarté" + (json.ignorees > 1 ? "s" : "") + " (la machine y radotait) : "
+        + "ces lignes-là sont replacées entre leurs voisines, vérifiez-les."
+      : "";
     var h2 = "<b>" + pct + " %</b> de vos paroles retrouvées dans l'audio · "
-      + json.heardCount + " mots entendus. " + verdict + fin;
+      + json.heardCount + " mots entendus. " + verdict + fin + ecart;
     $("asrstat").innerHTML = h2;
     if (json.heard){
       $("asrheard").hidden = false;
