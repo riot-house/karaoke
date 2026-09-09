@@ -25,12 +25,13 @@
  * 1. Transcription
  * ------------------------------------------------------------------ */
 
-const MODELS = {
-  // Le plus petit qui tienne la route en français. Premier chargement
-  // long, ensuite mis en cache par le navigateur.
-  petit:  'Xenova/whisper-tiny',
-  moyen:  'Xenova/whisper-base',
-  grand:  'Xenova/whisper-small'
+// Les mêmes paliers que le panneau After Effects. Les tailles sont
+// celles des modèles quantifiés réellement téléchargés, une seule fois,
+// puis gardés en cache par le navigateur.
+export const MODELS = {
+  petit: { id: 'onnx-community/whisper-tiny',  mo: 41,  nom: 'Rapide (tiny)' },
+  moyen: { id: 'onnx-community/whisper-base',  mo: 77,  nom: 'Équilibré (base)' },
+  grand: { id: 'onnx-community/whisper-small', mo: 248, nom: 'Précis (small)' }
 };
 
 let _pipe = null, _pipeName = '';
@@ -40,7 +41,7 @@ let _pipe = null, _pipeName = '';
  * le téléchargement du modèle, pour afficher une vraie barre.
  */
 export async function loadASR({ model = 'moyen', onProgress } = {}) {
-  const name = MODELS[model] || model;
+  const name = (MODELS[model] && MODELS[model].id) || model;
   if (_pipe && _pipeName === name) return _pipe;
   // import dynamique : la page reste utilisable si l'utilisateur ne
   // demande jamais de transcription
@@ -61,9 +62,9 @@ export async function loadASR({ model = 'moyen', onProgress } = {}) {
  * Transcrit un AudioBuffer déjà décodé.
  * Renvoie [{w, s, e}] — un mot, son début, sa fin, en secondes.
  */
-export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr', onProgress } = {}) {
+export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr', centre = false, onProgress } = {}) {
   const asr = await loadASR({ model, onProgress });
-  const mono = toMono16k(audioBuffer);
+  const mono = toMono16k(audioBuffer, { centre });
   const out = await asr(mono, {
     language,
     task: 'transcribe',
@@ -82,14 +83,79 @@ export async function transcribe(audioBuffer, { model = 'moyen', language = 'fr'
   return words;
 }
 
+/**
+ * Mise en avant du CENTRE stéréo.
+ *
+ * Dans un enregistrement, la voix est presque toujours au centre : elle
+ * apparaît identique à gauche et à droite. L'ambiance, la foule, les
+ * instruments larges, eux, diffèrent d'un canal à l'autre. En comparant
+ * les deux canaux fréquence par fréquence, on peut donc atténuer ce qui
+ * est large et garder ce qui est centré — ce qui donne à Whisper une
+ * voix moins encombrée.
+ *
+ * L'effet dépend entièrement du fichier : sur un enregistrement quasi
+ * mono, il n'y a rien à retirer et le résultat est inchangé.
+ */
+export function centreEmphasis(L, R, { strength = 2 } = {}) {
+  const n = Math.min(L.length, R.length);
+  const win = 1024, hop = 256, bins = win / 2 + 1;
+  const fft = makeFFT(win), ifft = makeIFFT(win);
+  const w = new Float32Array(win);
+  for (let i = 0; i < win; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (win - 1));
+
+  const out = new Float32Array(n), norm = new Float32Array(n);
+  const lr = new Float32Array(win), li = new Float32Array(win);
+  const rr = new Float32Array(win), ri = new Float32Array(win);
+
+  for (let off = 0; off + win <= n; off += hop) {
+    for (let i = 0; i < win; i++) {
+      lr[i] = L[off + i] * w[i]; li[i] = 0;
+      rr[i] = R[off + i] * w[i]; ri[i] = 0;
+    }
+    fft(lr, li); fft(rr, ri);
+    for (let k = 0; k < bins; k++) {
+      const mr = (lr[k] + rr[k]) / 2, mi = (li[k] + ri[k]) / 2;
+      const sr = (lr[k] - rr[k]) / 2, si = (li[k] - ri[k]) / 2;
+      const mMag = Math.hypot(mr, mi), sMag = Math.hypot(sr, si);
+      // 1 quand tout est centré, vers 0 quand les côtés dominent
+      const g = mMag / (mMag + strength * sMag + 1e-9);
+      const vr = mr * g, vi = mi * g;
+      lr[k] = vr; li[k] = vi;
+      if (k > 0 && k < win / 2) {                 // symétrie hermitienne
+        lr[win - k] = vr; li[win - k] = -vi;
+      }
+    }
+    ifft(lr, li);
+    for (let i = 0; i < win; i++) {
+      out[off + i] += lr[i] * w[i];
+      norm[off + i] += w[i] * w[i];
+    }
+  }
+  for (let i = 0; i < n; i++) if (norm[i] > 1e-6) out[i] /= norm[i];
+  return out;
+}
+
 /** Whisper attend du mono à 16 kHz. */
-export function toMono16k(buf) {
+export function toMono16k(buf, { centre = false } = {}) {
   const sr = 16000;
   const n = Math.round(buf.duration * sr);
   const out = new Float32Array(n);
   const chans = [];
   for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
   const ratio = buf.sampleRate / sr;
+
+  if (centre && chans.length >= 2) {
+    // on rééchantillonne les deux canaux, puis on met le centre en avant
+    const Lr = new Float32Array(n), Rr = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const src = i * ratio;
+      const i0 = Math.floor(src), i1 = Math.min(buf.length - 1, i0 + 1), f = src - i0;
+      Lr[i] = chans[0][i0] * (1 - f) + chans[0][i1] * f;
+      Rr[i] = chans[1][i0] * (1 - f) + chans[1][i1] * f;
+    }
+    return centreEmphasis(Lr, Rr);
+  }
+
   for (let i = 0; i < n; i++) {
     const src = i * ratio;
     const i0 = Math.floor(src), i1 = Math.min(buf.length - 1, i0 + 1), f = src - i0;
@@ -99,6 +165,43 @@ export function toMono16k(buf) {
   }
   return out;
 }
+
+/* --- FFT, pour la mise en avant du centre --- */
+function makeFFT(n, inverse) {
+  const cos = new Float32Array(n / 2), sin = new Float32Array(n / 2);
+  const sgn = inverse ? 1 : -1;
+  for (let i = 0; i < n / 2; i++) {
+    cos[i] = Math.cos(sgn * 2 * Math.PI * i / n);
+    sin[i] = Math.sin(sgn * 2 * Math.PI * i / n);
+  }
+  const rev = new Uint32Array(n);
+  let bits = 0; while ((1 << bits) < n) bits++;
+  for (let i = 0; i < n; i++) {
+    let r = 0;
+    for (let b = 0; b < bits; b++) if (i & (1 << b)) r |= 1 << (bits - 1 - b);
+    rev[i] = r;
+  }
+  return function (re, im) {
+    for (let i = 0; i < n; i++) {
+      const j = rev[i];
+      if (j > i) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (let size = 2; size <= n; size <<= 1) {
+      const half = size >> 1, step = n / size;
+      for (let i = 0; i < n; i += size) {
+        for (let j = i, k = 0; j < i + half; j++, k += step) {
+          const l = j + half;
+          const tr = re[l] * cos[k] - im[l] * sin[k];
+          const ti = re[l] * sin[k] + im[l] * cos[k];
+          re[l] = re[j] - tr; im[l] = im[j] - ti;
+          re[j] += tr; im[j] += ti;
+        }
+      }
+    }
+    if (inverse) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+  };
+}
+function makeIFFT(n) { return makeFFT(n, true); }
 
 /* ------------------------------------------------------------------ *
  * 2. Réalignement sur les paroles fournies
@@ -244,6 +347,8 @@ export async function autoAlign(audioBuffer, lyricsText, opts = {}) {
     language: opts.language || 'fr',
     model: 'whisper-' + (opts.model || 'moyen'),
     matched: r.matched,
+    heard: asr.map(x => x.w).join(' '),        // la transcription brute, pour diagnostic
+    heardCount: asr.length,
     words: r.words.map(w => ({
       w: w.w, s: Math.round(w.s * 1000) / 1000, e: Math.round(w.e * 1000) / 1000,
       line: w.line, lvl: 1
